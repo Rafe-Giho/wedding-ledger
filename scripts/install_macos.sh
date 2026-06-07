@@ -31,4 +31,9 @@ xattr -dr com.apple.quarantine "$INSTALL_DIR/$APP_NAME" 2>/dev/null || true
 codesign --verify --deep --strict --verbose=2 "$INSTALL_DIR/$APP_NAME"
 
 echo "설치 완료: $INSTALL_DIR/$APP_NAME"
-open "$INSTALL_DIR/$APP_NAME"
+
+if [ "${WEDDING_LEDGER_SKIP_OPEN:-0}" = "1" ]; then
+  echo "앱 실행은 건너뜁니다."
+else
+  open "$INSTALL_DIR/$APP_NAME"
+fi
