@@ -648,6 +648,7 @@ struct SummaryCardsRow: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 18)], spacing: 18) {
             StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign")
             StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: "사용 \(state.summary.totalTickets)매 ㅣ 남은 0매", symbol: "fork.knife")
+            StatCard(title: "총 봉투수", value: "\(state.summary.activeCount)개", footnote: "정상 기록 기준", symbol: "envelope")
             StatCard(
                 title: "평균 축의금",
                 value: formatWon(state.summary.activeCount == 0 ? 0 : state.summary.totalAmount / state.summary.activeCount),
@@ -756,6 +757,9 @@ struct SummaryView: View {
                 Text("정산")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.text)
+                Text("최근 입력: \(state.recentEntries.first?.createdAt ?? "아직 입력 없음")")
+                    .font(.footnote)
+                    .foregroundStyle(AppColors.muted)
                 LazyVGrid(columns: layout.summaryTileColumns, spacing: layout.summaryTileSpacing) {
                     SummaryTile("정상 기록", "\(state.summary.activeCount)건")
                     SummaryTile("취소 기록", "\(state.summary.voidCount)건")
@@ -884,8 +888,8 @@ struct SettingsView: View {
     private func exportExcel() {
         let panel = NSSavePanel()
         panel.title = "엑셀 파일 저장"
-        panel.nameFieldStringValue = "wedding_ledger_export.xls"
-        panel.allowedContentTypes = [UTType(filenameExtension: "xls") ?? .data]
+        panel.nameFieldStringValue = "wedding_ledger_export.xlsx"
+        panel.allowedContentTypes = [UTType(filenameExtension: "xlsx") ?? .data]
         if panel.runModal() == .OK, let url = panel.url {
             state.exportExcel(to: url)
         }
@@ -1048,6 +1052,7 @@ struct EntryTable: View {
                 TableColumn("식권") { Text("\($0.mealTicketCount)") }
                 TableColumn("방식") { Text($0.paymentMethod.label) }
                 TableColumn("상태") { Text($0.status.label) }
+                TableColumn("입력시간") { Text($0.createdAt) }
                 TableColumn("관리") { entry in
                     EntryStatusButton(entry: entry)
                 }
@@ -1081,6 +1086,9 @@ struct EntryCompactRow: View {
                     .foregroundStyle(AppColors.gold)
                 Text("식권 \(entry.mealTicketCount)매")
                     .font(.caption)
+                    .foregroundStyle(AppColors.muted)
+                Text(entry.createdAt)
+                    .font(.caption2)
                     .foregroundStyle(AppColors.muted)
             }
         }
