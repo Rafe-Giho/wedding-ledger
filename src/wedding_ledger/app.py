@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
@@ -23,22 +24,81 @@ from .excel_export import export_xls
 from .storage import WeddingLedgerDB
 
 
-BG = "#F5F2EC"
-SURFACE = "#FFFDF8"
-SURFACE_ALT = "#EDE7DC"
-TEXT = "#1D1B18"
-MUTED = "#756E64"
-ACCENT = "#1D1B18"
-ACCENT_DARK = "#0F0E0D"
-ACCENT_LIGHT = "#E8E1D4"
-DANGER = "#C8443D"
-BORDER = "#DDD4C7"
-FIELD_BG = "#FFFEFB"
+THEME_SYSTEM = "system"
+THEME_LIGHT = "light"
+THEME_DARK = "dark"
+THEME_LABELS = {
+    THEME_SYSTEM: "시스템 설정",
+    THEME_LIGHT: "라이트",
+    THEME_DARK: "다크",
+}
+THEME_LABEL_TO_MODE = {label: mode for mode, label in THEME_LABELS.items()}
+THEME_PALETTES = {
+    THEME_LIGHT: {
+        "bg": "#F5F2EC",
+        "sidebar": "#EEE6D9",
+        "surface": "#FFFDF8",
+        "surface_alt": "#EDE7DC",
+        "text": "#1D1B18",
+        "muted": "#756E64",
+        "accent": "#1D1B18",
+        "accent_dark": "#0F0E0D",
+        "accent_light": "#E8E1D4",
+        "danger": "#C8443D",
+        "danger_bg": "#F7E4E0",
+        "danger_hover": "#F0D1CC",
+        "danger_border": "#E7BDB7",
+        "border": "#DDD4C7",
+        "field_bg": "#FFFEFB",
+        "heading": "#1D1B18",
+    },
+    THEME_DARK: {
+        "bg": "#141311",
+        "sidebar": "#1D1A17",
+        "surface": "#24211D",
+        "surface_alt": "#332E28",
+        "text": "#F4EEE5",
+        "muted": "#B9AA99",
+        "accent": "#E9DCC7",
+        "accent_dark": "#F5EADC",
+        "accent_light": "#3C342B",
+        "danger": "#FF8C7A",
+        "danger_bg": "#4A2520",
+        "danger_hover": "#5A2E28",
+        "danger_border": "#724139",
+        "border": "#493F35",
+        "field_bg": "#1B1916",
+        "heading": "#0F0E0D",
+    },
+}
+
+BG = THEME_PALETTES[THEME_LIGHT]["bg"]
+SIDEBAR = THEME_PALETTES[THEME_LIGHT]["sidebar"]
+SURFACE = THEME_PALETTES[THEME_LIGHT]["surface"]
+SURFACE_ALT = THEME_PALETTES[THEME_LIGHT]["surface_alt"]
+TEXT = THEME_PALETTES[THEME_LIGHT]["text"]
+MUTED = THEME_PALETTES[THEME_LIGHT]["muted"]
+ACCENT = THEME_PALETTES[THEME_LIGHT]["accent"]
+ACCENT_DARK = THEME_PALETTES[THEME_LIGHT]["accent_dark"]
+ACCENT_LIGHT = THEME_PALETTES[THEME_LIGHT]["accent_light"]
+DANGER = THEME_PALETTES[THEME_LIGHT]["danger"]
+DANGER_BG = THEME_PALETTES[THEME_LIGHT]["danger_bg"]
+DANGER_HOVER = THEME_PALETTES[THEME_LIGHT]["danger_hover"]
+DANGER_BORDER = THEME_PALETTES[THEME_LIGHT]["danger_border"]
+BORDER = THEME_PALETTES[THEME_LIGHT]["border"]
+FIELD_BG = THEME_PALETTES[THEME_LIGHT]["field_bg"]
+HEADING = THEME_PALETTES[THEME_LIGHT]["heading"]
 INPUT_FONT = ("Apple SD Gothic Neo", 14)
 BODY_FONT = ("Apple SD Gothic Neo", 12)
 TITLE_FONT = ("Apple SD Gothic Neo", 28, "bold")
 SECTION_FONT = ("Apple SD Gothic Neo", 19, "bold")
 PASSWORD_MIN_LENGTH = 4
+NAV_ITEMS = (
+    ("entry", "입력"),
+    ("search", "검색"),
+    ("summary", "정산"),
+    ("settings", "설정"),
+)
 
 
 def format_won(value: int | str | None) -> str:
@@ -104,14 +164,69 @@ def merge_lookup_values(current: str, values: list[str]) -> list[str]:
     return merged
 
 
+def detect_system_theme() -> str:
+    try:
+        result = subprocess.run(
+            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=0.5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return THEME_LIGHT
+    return THEME_DARK if "Dark" in result.stdout else THEME_LIGHT
+
+
+def resolve_theme(preference: str) -> str:
+    if preference == THEME_DARK:
+        return THEME_DARK
+    if preference == THEME_LIGHT:
+        return THEME_LIGHT
+    return detect_system_theme()
+
+
+def apply_palette(theme: str) -> None:
+    global BG, SIDEBAR, SURFACE, SURFACE_ALT, TEXT, MUTED
+    global ACCENT, ACCENT_DARK, ACCENT_LIGHT, DANGER
+    global DANGER_BG, DANGER_HOVER, DANGER_BORDER, BORDER, FIELD_BG, HEADING
+    palette = THEME_PALETTES[theme]
+    BG = palette["bg"]
+    SIDEBAR = palette["sidebar"]
+    SURFACE = palette["surface"]
+    SURFACE_ALT = palette["surface_alt"]
+    TEXT = palette["text"]
+    MUTED = palette["muted"]
+    ACCENT = palette["accent"]
+    ACCENT_DARK = palette["accent_dark"]
+    ACCENT_LIGHT = palette["accent_light"]
+    DANGER = palette["danger"]
+    DANGER_BG = palette["danger_bg"]
+    DANGER_HOVER = palette["danger_hover"]
+    DANGER_BORDER = palette["danger_border"]
+    BORDER = palette["border"]
+    FIELD_BG = palette["field_bg"]
+    HEADING = palette["heading"]
+
+
 class RoundedButton(tk.Canvas):
     COLORS = {
         "primary": (ACCENT, ACCENT_DARK, "#FFFFFF", ACCENT),
         "secondary": (SURFACE_ALT, ACCENT_LIGHT, TEXT, BORDER),
         "ghost": (FIELD_BG, SURFACE_ALT, TEXT, BORDER),
         "chip": (FIELD_BG, ACCENT_LIGHT, TEXT, BORDER),
-        "danger": ("#F7E4E0", "#F0D1CC", DANGER, "#E7BDB7"),
+        "danger": (DANGER_BG, DANGER_HOVER, DANGER, DANGER_BORDER),
     }
+
+    @classmethod
+    def refresh_theme(cls) -> None:
+        cls.COLORS = {
+            "primary": (ACCENT, ACCENT_DARK, "#FFFFFF", ACCENT),
+            "secondary": (SURFACE_ALT, ACCENT_LIGHT, TEXT, BORDER),
+            "ghost": (FIELD_BG, SURFACE_ALT, TEXT, BORDER),
+            "chip": (FIELD_BG, ACCENT_LIGHT, TEXT, BORDER),
+            "danger": (DANGER_BG, DANGER_HOVER, DANGER, DANGER_BORDER),
+        }
 
     def __init__(
         self,
@@ -122,7 +237,7 @@ class RoundedButton(tk.Canvas):
         width: int | None = None,
         height: int = 38,
         radius: int = 17,
-        bg_color: str = SURFACE,
+        bg_color: str | None = None,
     ) -> None:
         self.text = text
         self.command = command
@@ -137,7 +252,7 @@ class RoundedButton(tk.Canvas):
             parent,
             width=self.button_width,
             height=height,
-            bg=bg_color,
+            bg=bg_color or SURFACE,
             bd=0,
             highlightthickness=0,
             relief="flat",
@@ -279,6 +394,9 @@ class WeddingLedgerApp(tk.Tk):
         self.unlocked = False
         self.last_activity = 0
         self.last_backup_at = 0
+        self.current_section = "entry"
+        self.theme_preference = self.db.get_setting("theme_preference") or THEME_SYSTEM
+        self._apply_theme_colors()
         self.title(APP_TITLE)
         self.geometry("1180x760")
         self.minsize(1020, 680)
@@ -304,9 +422,13 @@ class WeddingLedgerApp(tk.Tk):
         variant: str = "secondary",
         width: int | None = None,
         height: int = 38,
-        bg_color: str = SURFACE,
+        bg_color: str | None = None,
     ) -> RoundedButton:
-        return RoundedButton(parent, text, command, variant=variant, width=width, height=height, bg_color=bg_color)
+        return RoundedButton(parent, text, command, variant=variant, width=width, height=height, bg_color=bg_color or SURFACE)
+
+    def _apply_theme_colors(self) -> None:
+        apply_palette(resolve_theme(self.theme_preference))
+        RoundedButton.refresh_theme()
 
     def _configure_style(self) -> None:
         style = ttk.Style(self)
@@ -319,6 +441,10 @@ class WeddingLedgerApp(tk.Tk):
         style.configure("Muted.TLabel", foreground=MUTED)
         style.configure("Danger.TLabel", foreground=DANGER)
         style.configure("Hero.TFrame", background=BG)
+        style.configure("Sidebar.TFrame", background=SIDEBAR)
+        style.configure("Sidebar.TLabel", background=SIDEBAR, foreground=TEXT)
+        style.configure("SidebarMuted.TLabel", background=SIDEBAR, foreground=MUTED)
+        style.configure("Content.TFrame", background=BG)
         style.configure("HeroTitle.TLabel", background=BG, foreground=TEXT, font=TITLE_FONT)
         style.configure("HeroMuted.TLabel", background=BG, foreground=MUTED, font=BODY_FONT)
         style.configure("Pill.TLabel", background=ACCENT_LIGHT, foreground=ACCENT_DARK, font=("Apple SD Gothic Neo", 12, "bold"))
@@ -339,7 +465,8 @@ class WeddingLedgerApp(tk.Tk):
         style.configure("TNotebook.Tab", font=("Apple SD Gothic Neo", 12, "bold"), padding=(16, 9), background=SURFACE_ALT, foreground=MUTED)
         style.map("TNotebook.Tab", background=[("selected", SURFACE)], foreground=[("selected", TEXT)])
         style.configure("Treeview", font=("Apple SD Gothic Neo", 12), rowheight=34, background=FIELD_BG, fieldbackground=FIELD_BG, foreground=TEXT)
-        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 12, "bold"), background=TEXT, foreground="#FFFFFF")
+        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 12, "bold"), background=HEADING, foreground="#FFFFFF")
+        style.configure("TCombobox", fieldbackground=FIELD_BG, background=SURFACE_ALT, foreground=TEXT)
 
     def _bind_safe_focus_chain(
         self,
@@ -582,45 +709,74 @@ class WeddingLedgerApp(tk.Tk):
 
     def show_main(self) -> None:
         self._clear()
+        for attr in (
+            "group_select",
+            "relationship_select",
+            "last_tree",
+            "search_tree",
+            "summary_vars",
+            "group_tree",
+            "settings_text_var",
+        ):
+            if hasattr(self, attr):
+                delattr(self, attr)
         self._mark_activity()
-        header = ttk.Frame(self.container, padding=20, style="Hero.TFrame")
-        header.pack(fill="x", pady=(0, 16))
-        title_box = ttk.Frame(header, style="Hero.TFrame")
-        title_box.pack(side="left", fill="x", expand=True)
-        ttk.Label(title_box, text=APP_TITLE, style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(title_box, text="축의금과 식권을 빠르게 기록하고 정산합니다.", style="HeroMuted.TLabel").pack(anchor="w", pady=(4, 0))
-        header_actions = ttk.Frame(header, style="Hero.TFrame")
-        header_actions.pack(side="right")
-        self.mode_label = ttk.Label(header_actions, text="", style="Pill.TLabel", padding=(12, 7))
-        self.mode_label.pack(side="left", padx=(0, 10))
-        self._button(header_actions, "지금 잠금", lambda: self.lock_app("수동으로 잠금되었습니다."), width=104, bg_color=BG).pack(side="left")
+        shell = ttk.Frame(self.container, style="Content.TFrame")
+        shell.pack(fill="both", expand=True)
 
-        self.notebook = ttk.Notebook(self.container)
-        self.notebook.pack(fill="both", expand=True)
-        self.entry_tab = ttk.Frame(self.notebook, padding=12)
-        self.search_tab = ttk.Frame(self.notebook, padding=12)
-        self.summary_tab = ttk.Frame(self.notebook, padding=12)
-        self.settings_tab = ttk.Frame(self.notebook, padding=12)
-        self.notebook.add(self.entry_tab, text="입력")
-        self.notebook.add(self.search_tab, text="검색")
-        self.notebook.add(self.summary_tab, text="정산")
-        self.notebook.add(self.settings_tab, text="설정")
-        self.build_entry_tab()
-        self.build_search_tab()
-        self.build_summary_tab()
-        self.build_settings_tab()
+        sidebar = ttk.Frame(shell, padding=(18, 22), style="Sidebar.TFrame")
+        sidebar.pack(side="left", fill="y", padx=(0, 18))
+        ttk.Label(sidebar, text=APP_TITLE, style="Sidebar.TLabel", font=("Apple SD Gothic Neo", 20, "bold")).pack(anchor="w")
+        ttk.Label(sidebar, text="축의금과 식권 정산", style="SidebarMuted.TLabel").pack(anchor="w", pady=(4, 26))
+        self.mode_label = ttk.Label(sidebar, text="", style="Pill.TLabel", padding=(12, 7))
+        self.mode_label.pack(anchor="w", pady=(0, 18))
+        for section_key, label in NAV_ITEMS:
+            variant = "primary" if self.current_section == section_key else "ghost"
+            self._button(sidebar, label, lambda key=section_key: self.switch_section(key), variant=variant, width=148, bg_color=SIDEBAR).pack(anchor="w", pady=5)
+        ttk.Frame(sidebar, style="Sidebar.TFrame").pack(fill="both", expand=True)
+        self._button(sidebar, "지금 잠금", lambda: self.lock_app("수동으로 잠금되었습니다."), width=148, bg_color=SIDEBAR).pack(anchor="w", pady=(18, 0))
+
+        content = ttk.Frame(shell, style="Content.TFrame")
+        content.pack(side="left", fill="both", expand=True)
+        header = ttk.Frame(content, padding=(2, 0, 2, 14), style="Hero.TFrame")
+        header.pack(fill="x")
+        ttk.Label(header, text=dict(NAV_ITEMS)[self.current_section], style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(header, text="빠르게 입력하고 바로 확인할 수 있게 정리했습니다.", style="HeroMuted.TLabel").pack(anchor="w", pady=(4, 0))
+
+        active_tab = ttk.Frame(content, padding=0, style="Content.TFrame")
+        active_tab.pack(fill="both", expand=True)
+        self.entry_tab = active_tab
+        self.search_tab = active_tab
+        self.summary_tab = active_tab
+        self.settings_tab = active_tab
+        if self.current_section == "entry":
+            self.build_entry_tab()
+        elif self.current_section == "search":
+            self.build_search_tab()
+        elif self.current_section == "summary":
+            self.build_summary_tab()
+        else:
+            self.build_settings_tab()
         self.refresh_all()
         self._schedule_lock_check()
+
+    def switch_section(self, section_key: str) -> None:
+        self.current_section = section_key
+        self.show_main()
 
     def refresh_all(self) -> None:
         if not self.unlocked:
             return
         mode = self.db.get_mode()
         self.mode_label.configure(text=f"{MODE_LABELS[mode]} 모드")
-        self.refresh_entry_defaults()
-        self.refresh_last_entries()
-        self.refresh_search()
-        self.refresh_summary()
+        if hasattr(self, "group_select"):
+            self.refresh_entry_defaults()
+        if hasattr(self, "last_tree"):
+            self.refresh_last_entries()
+        if hasattr(self, "search_tree"):
+            self.refresh_search()
+        if hasattr(self, "summary_vars"):
+            self.refresh_summary()
         self.refresh_settings()
 
     def build_entry_tab(self) -> None:
@@ -1149,6 +1305,13 @@ class WeddingLedgerApp(tk.Tk):
         settings_card.pack(anchor="nw", fill="x")
         ttk.Label(settings_card, text="설정/백업", style="CardTitle.TLabel").pack(anchor="w", pady=(0, 10))
         ttk.Label(settings_card, textvariable=self.settings_text_var, style="CardMuted.TLabel").pack(anchor="w", pady=(0, 14))
+        theme_row = ttk.Frame(settings_card, style="Card.TFrame")
+        theme_row.pack(anchor="w", fill="x", pady=(0, 14))
+        ttk.Label(theme_row, text="화면 테마", style="Card.TLabel").pack(side="left", padx=(0, 10))
+        self.theme_var = tk.StringVar(value=THEME_LABELS.get(self.theme_preference, THEME_LABELS[THEME_SYSTEM]))
+        theme_combo = ttk.Combobox(theme_row, textvariable=self.theme_var, values=list(THEME_LABELS.values()), state="readonly", width=14)
+        theme_combo.pack(side="left")
+        theme_combo.bind("<<ComboboxSelected>>", lambda _event: self.change_theme_preference())
         buttons = ttk.Frame(settings_card, style="Card.TFrame")
         buttons.pack(anchor="w")
         self._button(buttons, "테스트 모드로 전환", lambda: self.switch_mode(MODE_TEST), width=164).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
@@ -1163,7 +1326,16 @@ class WeddingLedgerApp(tk.Tk):
 
     def refresh_settings(self) -> None:
         if hasattr(self, "settings_text_var"):
-            self.settings_text_var.set(f"데이터 위치: {self.db.app_dir}")
+            active_theme = "다크" if resolve_theme(self.theme_preference) == THEME_DARK else "라이트"
+            self.settings_text_var.set(f"데이터 위치: {self.db.app_dir}\n현재 적용 테마: {active_theme}")
+
+    def change_theme_preference(self) -> None:
+        self.theme_preference = THEME_LABEL_TO_MODE.get(self.theme_var.get(), THEME_SYSTEM)
+        self.db.set_setting("theme_preference", self.theme_preference)
+        self._apply_theme_colors()
+        self.configure(bg=BG)
+        self._configure_style()
+        self.show_main()
 
     def switch_mode(self, mode: str) -> None:
         if mode == MODE_LIVE and not messagebox.askyesno("운영 모드 전환", "운영 모드에서는 실제 기록을 입력합니다. 전환할까요?"):
