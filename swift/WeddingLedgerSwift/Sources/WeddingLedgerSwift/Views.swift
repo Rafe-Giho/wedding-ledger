@@ -116,9 +116,35 @@ struct ShellView: View {
                         WorkspaceContent(section: $section, layout: layout)
                     }
                 }
+                WindowZoomStrip()
+                    .frame(height: 26)
+                    .padding(.leading, 88)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .background(AppColors.background)
+    }
+}
+
+struct WindowZoomStrip: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowZoomStripView {
+        WindowZoomStripView()
+    }
+
+    func updateNSView(_ nsView: WindowZoomStripView, context: Context) {}
+}
+
+final class WindowZoomStripView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        guard let window else {
+            super.mouseDown(with: event)
+            return
+        }
+        if event.clickCount == 2 {
+            window.performZoom(nil)
+        } else {
+            window.performDrag(with: event)
+        }
     }
 }
 
