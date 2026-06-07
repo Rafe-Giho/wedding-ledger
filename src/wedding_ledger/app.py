@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 from typing import Callable
 
 from .constants import (
@@ -104,6 +104,94 @@ def merge_lookup_values(current: str, values: list[str]) -> list[str]:
     return merged
 
 
+class RoundedButton(tk.Canvas):
+    COLORS = {
+        "primary": (ACCENT, ACCENT_DARK, "#FFFFFF", ACCENT),
+        "secondary": (SURFACE_ALT, ACCENT_LIGHT, TEXT, BORDER),
+        "ghost": (FIELD_BG, SURFACE_ALT, TEXT, BORDER),
+        "chip": (FIELD_BG, ACCENT_LIGHT, TEXT, BORDER),
+        "danger": ("#F7E4E0", "#F0D1CC", DANGER, "#E7BDB7"),
+    }
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None],
+        variant: str = "secondary",
+        width: int | None = None,
+        height: int = 38,
+        radius: int = 17,
+        bg_color: str = SURFACE,
+    ) -> None:
+        self.text = text
+        self.command = command
+        self.variant = variant if variant in self.COLORS else "secondary"
+        self.height = height
+        self.radius = min(radius, height // 2)
+        measured = tkfont.Font(font=BODY_FONT).measure(text) + 34
+        self.button_width = max(width or measured, 52)
+        self.is_hovered = False
+        self.is_pressed = False
+        super().__init__(
+            parent,
+            width=self.button_width,
+            height=height,
+            bg=bg_color,
+            bd=0,
+            highlightthickness=0,
+            relief="flat",
+            cursor="hand2",
+        )
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self._draw()
+
+    def _rounded_rect(self, x1: int, y1: int, x2: int, y2: int, radius: int, fill: str) -> None:
+        self.create_arc(x1, y1, x1 + radius * 2, y1 + radius * 2, start=90, extent=90, fill=fill, outline=fill)
+        self.create_arc(x2 - radius * 2, y1, x2, y1 + radius * 2, start=0, extent=90, fill=fill, outline=fill)
+        self.create_arc(x1, y2 - radius * 2, x1 + radius * 2, y2, start=180, extent=90, fill=fill, outline=fill)
+        self.create_arc(x2 - radius * 2, y2 - radius * 2, x2, y2, start=270, extent=90, fill=fill, outline=fill)
+        self.create_rectangle(x1 + radius, y1, x2 - radius, y2, fill=fill, outline=fill)
+        self.create_rectangle(x1, y1 + radius, x2, y2 - radius, fill=fill, outline=fill)
+
+    def _draw(self) -> None:
+        fill, hover, foreground, border = self.COLORS[self.variant]
+        bg = hover if self.is_hovered or self.is_pressed else fill
+        self.delete("all")
+        self._rounded_rect(0, 0, self.button_width, self.height, self.radius, border)
+        self._rounded_rect(1, 1, self.button_width - 1, self.height - 1, max(self.radius - 1, 1), bg)
+        self.create_text(
+            self.button_width // 2,
+            self.height // 2,
+            text=self.text,
+            font=BODY_FONT,
+            fill=foreground,
+        )
+
+    def _on_enter(self, _event: tk.Event) -> None:
+        self.is_hovered = True
+        self._draw()
+
+    def _on_leave(self, _event: tk.Event) -> None:
+        self.is_hovered = False
+        self.is_pressed = False
+        self._draw()
+
+    def _on_press(self, _event: tk.Event) -> None:
+        self.is_pressed = True
+        self._draw()
+
+    def _on_release(self, event: tk.Event) -> None:
+        should_run = self.is_pressed and 0 <= event.x <= self.button_width and 0 <= event.y <= self.height
+        self.is_pressed = False
+        self._draw()
+        if should_run:
+            self.command()
+
+
 class SuggestionEntry(ttk.Frame):
     def __init__(
         self,
@@ -133,23 +221,7 @@ class SuggestionEntry(ttk.Frame):
             highlightcolor=ACCENT,
         )
         self.entry.pack(side="left", fill="x", expand=True)
-        self.button = tk.Button(
-            self,
-            text="목록",
-            command=self.show_popup,
-            font=("Apple SD Gothic Neo", 11, "bold"),
-            bg=FIELD_BG,
-            fg=MUTED,
-            activebackground=SURFACE_ALT,
-            activeforeground=TEXT,
-            relief="flat",
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=BORDER,
-            highlightcolor=BORDER,
-            padx=10,
-            takefocus=False,
-        )
+        self.button = RoundedButton(self, "목록", self.show_popup, variant="ghost", width=58, height=34)
         self.button.pack(side="left", padx=(6, 0))
         self.entry.bind("<Down>", lambda _event: self._show_popup_from_key())
         self.entry.bind("<Escape>", lambda _event: self.hide_popup())
@@ -243,6 +315,18 @@ class WeddingLedgerApp(tk.Tk):
             self.show_login()
         else:
             self.show_setup()
+
+    def _button(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None],
+        variant: str = "secondary",
+        width: int | None = None,
+        height: int = 38,
+        bg_color: str = SURFACE,
+    ) -> RoundedButton:
+        return RoundedButton(parent, text, command, variant=variant, width=width, height=height, bg_color=bg_color)
 
     def _configure_style(self) -> None:
         style = ttk.Style(self)
@@ -412,7 +496,7 @@ class WeddingLedgerApp(tk.Tk):
             self._mark_activity()
             self.show_main()
 
-        ttk.Button(frame, text="비밀번호 설정", command=submit, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=(16, 0))
+        self._button(frame, "비밀번호 설정", submit, variant="primary", width=132).grid(row=4, column=1, sticky="e", pady=(16, 0))
         self._bind_safe_focus_chain([password_entry, confirm_entry], submit)
         password_entry.focus_set()
 
@@ -428,7 +512,7 @@ class WeddingLedgerApp(tk.Tk):
         text.pack(fill="x", padx=24, pady=20)
         text.insert("1.0", recovery_key)
         text.configure(state="disabled")
-        ttk.Button(top, text="보관했습니다", command=top.destroy, style="Accent.TButton").pack(anchor="e", padx=24, pady=8)
+        self._button(top, "보관했습니다", top.destroy, variant="primary", width=124, bg_color=BG).pack(anchor="e", padx=24, pady=8)
         self.wait_window(top)
 
     def show_login(self, notice: str = "") -> None:
@@ -452,8 +536,8 @@ class WeddingLedgerApp(tk.Tk):
             self._mark_activity()
             self.show_main()
 
-        ttk.Button(frame, text="로그인", command=unlock, style="Accent.TButton").grid(row=3, column=1, sticky="e", pady=(16, 0))
-        ttk.Button(frame, text="비밀번호를 잊으셨나요?", command=self.show_password_recovery).grid(row=4, column=1, sticky="e", pady=(8, 0))
+        self._button(frame, "로그인", unlock, variant="primary", width=96).grid(row=3, column=1, sticky="e", pady=(16, 0))
+        self._button(frame, "비밀번호를 잊으셨나요?", self.show_password_recovery, width=172).grid(row=4, column=1, sticky="e", pady=(8, 0))
         entry.focus_set()
         entry.bind("<Return>", lambda _event: unlock())
 
@@ -497,7 +581,7 @@ class WeddingLedgerApp(tk.Tk):
             messagebox.showinfo("완료", "비밀번호가 변경되었습니다.")
             top.destroy()
 
-        ttk.Button(top, text="비밀번호 재설정", command=reset, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=16)
+        self._button(top, "비밀번호 재설정", reset, variant="primary", width=142, bg_color=BG).grid(row=4, column=1, sticky="e", pady=16)
         self._bind_safe_focus_chain([recovery_entry, password_entry, confirm_entry], reset)
         recovery_entry.focus_set()
 
@@ -529,7 +613,7 @@ class WeddingLedgerApp(tk.Tk):
         header_actions.pack(side="right")
         self.mode_label = ttk.Label(header_actions, text="", style="Pill.TLabel", padding=(12, 7))
         self.mode_label.pack(side="left", padx=(0, 10))
-        ttk.Button(header_actions, text="지금 잠금", command=lambda: self.lock_app("수동으로 잠금되었습니다.")).pack(side="left")
+        self._button(header_actions, "지금 잠금", lambda: self.lock_app("수동으로 잠금되었습니다."), width=104, bg_color=BG).pack(side="left")
 
         self.notebook = ttk.Notebook(self.container)
         self.notebook.pack(fill="both", expand=True)
@@ -537,10 +621,10 @@ class WeddingLedgerApp(tk.Tk):
         self.search_tab = ttk.Frame(self.notebook, padding=12)
         self.summary_tab = ttk.Frame(self.notebook, padding=12)
         self.settings_tab = ttk.Frame(self.notebook, padding=12)
-        self.notebook.add(self.entry_tab, text="빠른 입력")
-        self.notebook.add(self.search_tab, text="검색/수정")
+        self.notebook.add(self.entry_tab, text="입력")
+        self.notebook.add(self.search_tab, text="검색")
         self.notebook.add(self.summary_tab, text="정산")
-        self.notebook.add(self.settings_tab, text="설정/백업")
+        self.notebook.add(self.settings_tab, text="설정")
         self.build_entry_tab()
         self.build_search_tab()
         self.build_summary_tab()
@@ -586,8 +670,8 @@ class WeddingLedgerApp(tk.Tk):
         amount_frame = ttk.Frame(form, style="Card.TFrame")
         amount_frame.grid(row=6, column=1, columnspan=2, sticky="w", pady=(0, 8))
         for index, amount in enumerate(DEFAULT_QUICK_AMOUNTS):
-            ttk.Button(amount_frame, text=format_number(amount), command=lambda value=amount: self._set_amount_var(self.amount_var, value), style="Chip.TButton").grid(row=index // 4, column=index % 4, padx=3, pady=3)
-        ttk.Button(amount_frame, text="+1만원", command=lambda: self._add_amount(self.amount_var, 10_000), style="Chip.TButton").grid(row=2, column=0, columnspan=2, sticky="ew", padx=3, pady=3)
+            self._button(amount_frame, format_number(amount), lambda value=amount: self._set_amount_var(self.amount_var, value), variant="chip", width=78, height=34).grid(row=index // 4, column=index % 4, padx=3, pady=3)
+        self._button(amount_frame, "+1만원", lambda: self._add_amount(self.amount_var, 10_000), variant="chip", width=162, height=34).grid(row=2, column=0, columnspan=2, sticky="ew", padx=3, pady=3)
 
         ttk.Label(form, text="식권 수 *", style="Card.TLabel").grid(row=7, column=0, sticky="e", padx=8, pady=7)
         self.ticket_spinbox = ttk.Spinbox(form, textvariable=self.ticket_var, from_=0, to=20, width=8)
@@ -597,8 +681,8 @@ class WeddingLedgerApp(tk.Tk):
         self.payment_combo = ttk.Combobox(form, textvariable=self.payment_var, values=list(PAYMENT_METHODS.values()), state="readonly", width=12)
         self.payment_combo.grid(row=8, column=1, sticky="w")
         self.memo_entry = self._labeled_entry(form, "메모", self.memo_var, 9)
-        ttk.Button(form, text="저장하고 다음 봉투", command=self.save_entry, style="Accent.TButton").grid(row=10, column=1, sticky="ew", pady=(14, 4))
-        ttk.Button(form, text="입력 초기화", command=self.clear_entry_form).grid(row=10, column=2, sticky="ew", pady=(14, 4), padx=(8, 0))
+        self._button(form, "저장하고 다음 봉투", self.save_entry, variant="primary", width=172).grid(row=10, column=1, sticky="ew", pady=(14, 4))
+        self._button(form, "입력 초기화", self.clear_entry_form, width=118).grid(row=10, column=2, sticky="ew", pady=(14, 4), padx=(8, 0))
         self._bind_safe_focus_chain(
             [
                 self.envelope_entry,
@@ -740,8 +824,8 @@ class WeddingLedgerApp(tk.Tk):
         search_mode_combo = ttk.Combobox(filters, textvariable=self.search_mode_var, values=["현재 모드", "테스트", "운영", "전체"], state="readonly", width=10)
         search_mode_combo.grid(row=1, column=5, sticky="w")
         ttk.Label(filters, text="모드", style="Card.TLabel").grid(row=1, column=4, sticky="e", padx=(0, 4))
-        ttk.Button(filters, text="검색", command=self.refresh_search, style="Accent.TButton").grid(row=1, column=7, padx=4)
-        ttk.Button(filters, text="초기화", command=self.reset_search).grid(row=1, column=8, padx=4)
+        self._button(filters, "검색", self.refresh_search, variant="primary", width=78).grid(row=1, column=7, padx=4)
+        self._button(filters, "초기화", self.reset_search, width=82).grid(row=1, column=8, padx=4)
         self._bind_safe_focus_chain(
             [
                 *search_entries,
@@ -762,9 +846,9 @@ class WeddingLedgerApp(tk.Tk):
 
         actions = ttk.Frame(self.search_tab, padding=(0, 8, 0, 0))
         actions.pack(fill="x", pady=(10, 0))
-        ttk.Button(actions, text="선택 수정", command=lambda: self.edit_selected_from_tree(self.search_tree)).pack(side="left", padx=(0, 6))
-        ttk.Button(actions, text="선택 취소 처리", command=self.void_selected).pack(side="left", padx=6)
-        ttk.Button(actions, text="선택 정상 복구", command=self.restore_selected).pack(side="left", padx=6)
+        self._button(actions, "선택 수정", lambda: self.edit_selected_from_tree(self.search_tree), width=104, bg_color=BG).pack(side="left", padx=(0, 6))
+        self._button(actions, "선택 취소 처리", self.void_selected, variant="danger", width=132, bg_color=BG).pack(side="left", padx=6)
+        self._button(actions, "선택 정상 복구", self.restore_selected, width=132, bg_color=BG).pack(side="left", padx=6)
 
     def _create_tree(self, parent: ttk.Frame, columns: tuple[str, ...], headings: tuple[str, ...]) -> ttk.Treeview:
         tree = ttk.Treeview(parent, columns=columns, show="headings")
@@ -956,7 +1040,7 @@ class WeddingLedgerApp(tk.Tk):
             top.destroy()
             self.refresh_all()
 
-        ttk.Button(top, text="수정 저장", command=save, style="Accent.TButton").grid(row=11, column=1, sticky="e", pady=16)
+        self._button(top, "수정 저장", save, variant="primary", width=104, bg_color=BG).grid(row=11, column=1, sticky="e", pady=16)
         self._bind_safe_focus_chain(edit_widgets, save)
         edit_widgets[1].focus_set()
 
@@ -1035,7 +1119,7 @@ class WeddingLedgerApp(tk.Tk):
         actual_cash_entry = self._make_entry(compare, self.actual_cash_var, width=16, validate_amount=True)
         actual_cash_entry.pack(side="left", padx=6)
         actual_cash_entry.bind("<FocusOut>", lambda _event: self._format_amount_var(self.actual_cash_var))
-        ttk.Button(compare, text="검증", command=self.compare_actuals).pack(side="left", padx=8)
+        self._button(compare, "검증", self.compare_actuals, variant="primary", width=78).pack(side="left", padx=8)
         ttk.Label(compare, textvariable=self.compare_result_var, style="CardDanger.TLabel").pack(side="left", padx=10)
         self._bind_safe_focus_chain([actual_envelope_entry, actual_cash_entry], self.compare_actuals)
 
@@ -1087,13 +1171,13 @@ class WeddingLedgerApp(tk.Tk):
         ttk.Label(settings_card, textvariable=self.settings_text_var, style="CardMuted.TLabel").pack(anchor="w", pady=(0, 14))
         buttons = ttk.Frame(settings_card, style="Card.TFrame")
         buttons.pack(anchor="w")
-        ttk.Button(buttons, text="테스트 모드로 전환", command=lambda: self.switch_mode(MODE_TEST)).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="운영 모드로 전환", command=lambda: self.switch_mode(MODE_LIVE)).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="테스트 데이터 초기화", command=self.clear_test_data).grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="엑셀 추출", command=self.export_excel).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="수동 백업 생성", command=self.manual_backup).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="백업 복원", command=self.restore_backup).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="비밀번호 변경", command=self.change_password_dialog).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "테스트 모드로 전환", lambda: self.switch_mode(MODE_TEST), width=164).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "운영 모드로 전환", lambda: self.switch_mode(MODE_LIVE), variant="primary", width=164).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "테스트 데이터 초기화", self.clear_test_data, variant="danger", width=164).grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "엑셀 추출", self.export_excel, width=164).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "수동 백업 생성", self.manual_backup, width=164).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "백업 복원", self.restore_backup, width=164).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "비밀번호 변경", self.change_password_dialog, width=164).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
     def refresh_settings(self) -> None:
         if hasattr(self, "settings_text_var"):
@@ -1192,7 +1276,7 @@ class WeddingLedgerApp(tk.Tk):
             messagebox.showinfo("완료", "비밀번호가 변경되었습니다.")
             top.destroy()
 
-        ttk.Button(top, text="변경", command=submit, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=12)
+        self._button(top, "변경", submit, variant="primary", width=82, bg_color=BG).grid(row=4, column=1, sticky="e", pady=12)
         self._bind_safe_focus_chain(password_widgets, submit)
         password_widgets[0].focus_set()
 
