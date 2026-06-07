@@ -23,17 +23,17 @@ from .excel_export import export_xls
 from .storage import WeddingLedgerDB
 
 
-BG = "#F6F7F2"
+BG = "#F7F8FC"
 SURFACE = "#FFFFFF"
-SURFACE_ALT = "#EEF2EC"
-TEXT = "#17211D"
-MUTED = "#66726B"
-ACCENT = "#0E7C66"
-ACCENT_DARK = "#0A3F35"
-ACCENT_LIGHT = "#E7F4EF"
-DANGER = "#B13A2E"
-BORDER = "#D9E0D8"
-FIELD_BG = "#FFFFFF"
+SURFACE_ALT = "#F0F2F7"
+TEXT = "#171A20"
+MUTED = "#747B88"
+ACCENT = "#4F63F6"
+ACCENT_DARK = "#2430A3"
+ACCENT_LIGHT = "#EEF1FF"
+DANGER = "#E24A4A"
+BORDER = "#E3E6EE"
+FIELD_BG = "#FBFCFF"
 INPUT_FONT = ("Apple SD Gothic Neo", 14)
 BODY_FONT = ("Apple SD Gothic Neo", 12)
 TITLE_FONT = ("Apple SD Gothic Neo", 28, "bold")
@@ -94,8 +94,8 @@ class SuggestionEntry(ttk.Frame):
             fg=TEXT,
             insertbackground=ACCENT_DARK,
             insertwidth=2,
-            relief="solid",
-            bd=1,
+            relief="flat",
+            bd=0,
             highlightthickness=1,
             highlightbackground=BORDER,
             highlightcolor=ACCENT,
@@ -106,13 +106,13 @@ class SuggestionEntry(ttk.Frame):
             text="목록",
             command=self.show_popup,
             font=("Apple SD Gothic Neo", 11, "bold"),
-            bg=SURFACE_ALT,
-            fg=TEXT,
-            activebackground=ACCENT_LIGHT,
+            bg=ACCENT_LIGHT,
+            fg=ACCENT_DARK,
+            activebackground="#E2E7FF",
             activeforeground=ACCENT_DARK,
-            relief="solid",
-            bd=1,
-            padx=8,
+            relief="flat",
+            bd=0,
+            padx=10,
         )
         self.button.pack(side="left", padx=(6, 0))
         self.entry.bind("<Down>", lambda _event: self._show_popup_from_key())
@@ -137,7 +137,7 @@ class SuggestionEntry(ttk.Frame):
             return
         self.popup = tk.Toplevel(self)
         self.popup.overrideredirect(True)
-        self.popup.configure(bg=BORDER)
+        self.popup.configure(bg="#DADFED")
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height() + 2
         width = max(self.winfo_width(), 220)
@@ -146,7 +146,7 @@ class SuggestionEntry(ttk.Frame):
         listbox = tk.Listbox(
             self.popup,
             font=INPUT_FONT,
-            bg=FIELD_BG,
+            bg=SURFACE,
             fg=TEXT,
             activebackground=ACCENT_LIGHT,
             activeforeground=TEXT,
@@ -215,20 +215,20 @@ class WeddingLedgerApp(tk.Tk):
         style.configure("Section.TLabel", font=SECTION_FONT, foreground=TEXT)
         style.configure("Muted.TLabel", foreground=MUTED)
         style.configure("Danger.TLabel", foreground=DANGER)
-        style.configure("Hero.TFrame", background=SURFACE)
-        style.configure("HeroTitle.TLabel", background=SURFACE, foreground=TEXT, font=TITLE_FONT)
-        style.configure("HeroMuted.TLabel", background=SURFACE, foreground=MUTED, font=BODY_FONT)
+        style.configure("Hero.TFrame", background=BG)
+        style.configure("HeroTitle.TLabel", background=BG, foreground=TEXT, font=TITLE_FONT)
+        style.configure("HeroMuted.TLabel", background=BG, foreground=MUTED, font=BODY_FONT)
         style.configure("Pill.TLabel", background=ACCENT_LIGHT, foreground=ACCENT_DARK, font=("Apple SD Gothic Neo", 12, "bold"))
         style.configure("Card.TFrame", background=SURFACE, relief="flat")
         style.configure("Accent.TButton", font=("Apple SD Gothic Neo", 13, "bold"), foreground="#FFFFFF", background=ACCENT)
         style.map("Accent.TButton", background=[("active", ACCENT_DARK), ("pressed", ACCENT_DARK)])
-        style.configure("TButton", font=BODY_FONT, padding=(12, 8), background=SURFACE_ALT)
+        style.configure("TButton", font=BODY_FONT, padding=(12, 8), background=SURFACE_ALT, borderwidth=0, relief="flat")
         style.configure("Danger.TButton", foreground=DANGER)
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", font=("Apple SD Gothic Neo", 12, "bold"), padding=(16, 9), background=SURFACE_ALT, foreground=MUTED)
         style.map("TNotebook.Tab", background=[("selected", SURFACE)], foreground=[("selected", TEXT)])
         style.configure("Treeview", font=("Apple SD Gothic Neo", 12), rowheight=34, background=FIELD_BG, fieldbackground=FIELD_BG, foreground=TEXT)
-        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 12, "bold"), background=ACCENT_DARK, foreground="#FFFFFF")
+        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 12, "bold"), background="#252A3D", foreground="#FFFFFF")
 
     def _bind_safe_focus_chain(
         self,
@@ -289,8 +289,8 @@ class WeddingLedgerApp(tk.Tk):
             fg=TEXT,
             insertbackground=ACCENT_DARK,
             insertwidth=2,
-            relief="solid",
-            bd=1,
+            relief="flat",
+            bd=0,
             highlightthickness=1,
             highlightbackground=BORDER,
             highlightcolor=ACCENT,
