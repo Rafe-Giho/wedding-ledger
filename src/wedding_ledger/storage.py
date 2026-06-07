@@ -24,6 +24,7 @@ from .security import (
     generate_recovery_key,
     generate_salt,
     hash_secret,
+    normalize_keyboard_secret,
     normalize_recovery_key,
     verify_secret,
 )
@@ -161,8 +162,9 @@ class WeddingLedgerDB:
     def setup_auth(self, password: str) -> str:
         if self.is_configured():
             raise ValueError("이미 비밀번호가 설정되어 있습니다.")
-        if len(password) < 6:
-            raise ValueError("비밀번호는 6자 이상이어야 합니다.")
+        normalized_password = normalize_keyboard_secret(password)
+        if len(normalized_password) < 4:
+            raise ValueError("비밀번호는 4자 이상이어야 합니다.")
 
         password_salt = generate_salt()
         recovery_salt = generate_salt()
@@ -170,7 +172,7 @@ class WeddingLedgerDB:
         normalized_recovery_key = normalize_recovery_key(recovery_key)
 
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("recovery_salt", recovery_salt)
         self.set_setting("recovery_hash", hash_secret(normalized_recovery_key, recovery_salt))
@@ -184,11 +186,13 @@ class WeddingLedgerDB:
         iterations = int(self.get_setting("password_iterations") or PBKDF2_ITERATIONS)
         if not salt or not expected:
             return False
-        return verify_secret(password, salt, expected, iterations)
+        normalized_password = normalize_keyboard_secret(password)
+        return verify_secret(normalized_password, salt, expected, iterations) or verify_secret(password, salt, expected, iterations)
 
     def reset_password_with_recovery(self, recovery_key: str, new_password: str) -> bool:
-        if len(new_password) < 6:
-            raise ValueError("새 비밀번호는 6자 이상이어야 합니다.")
+        normalized_new_password = normalize_keyboard_secret(new_password)
+        if len(normalized_new_password) < 4:
+            raise ValueError("새 비밀번호는 4자 이상이어야 합니다.")
         salt = self.get_setting("recovery_salt")
         expected = self.get_setting("recovery_hash")
         iterations = int(self.get_setting("recovery_iterations") or PBKDF2_ITERATIONS)
@@ -199,7 +203,7 @@ class WeddingLedgerDB:
             return False
         password_salt = generate_salt()
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(new_password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_new_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("password_reset_at", now_iso())
         return True
@@ -207,11 +211,12 @@ class WeddingLedgerDB:
     def change_password(self, current_password: str, new_password: str) -> bool:
         if not self.verify_password(current_password):
             return False
-        if len(new_password) < 6:
-            raise ValueError("새 비밀번호는 6자 이상이어야 합니다.")
+        normalized_new_password = normalize_keyboard_secret(new_password)
+        if len(normalized_new_password) < 4:
+            raise ValueError("새 비밀번호는 4자 이상이어야 합니다.")
         password_salt = generate_salt()
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(new_password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_new_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("password_changed_at", now_iso())
         return True
@@ -271,6 +276,7 @@ class WeddingLedgerDB:
     def lookup_values(self, kind: str, limit: int = 50) -> list[str]:
         if kind not in ("group", "relationship"):
             raise ValueError("지원하지 않는 목록 종류입니다.")
+        entry_column = "group_name" if kind == "group" else "relationship"
         rows = self.conn.execute(
             """
             SELECT value
@@ -281,7 +287,24 @@ class WeddingLedgerDB:
             """,
             (kind, limit),
         ).fetchall()
-        values = [row["value"] for row in rows]
+        entry_rows = self.conn.execute(
+            f"""
+            SELECT {entry_column} AS value
+            FROM entries
+            WHERE TRIM({entry_column}) != ''
+            GROUP BY {entry_column}
+            ORDER BY COUNT(*) DESC, MAX(updated_at) DESC, value ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        values: list[str] = []
+        for row in [*rows, *entry_rows]:
+            value = str(row["value"]).strip()
+            if value and value not in values:
+                values.append(value)
+            if len(values) >= limit:
+                break
         if kind == "group" and DEFAULT_GROUP not in values:
             values.insert(0, DEFAULT_GROUP)
         return values
@@ -604,7 +627,7 @@ class WeddingLedgerDB:
         return [dict(row) for row in rows]
 
     def create_backup(self, label: str = "auto") -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         safe_label = "".join(ch for ch in label if ch.isalnum() or ch in ("_", "-")) or "auto"
         target = self.backup_dir / f"wedding_ledger_{safe_label}_{timestamp}.sqlite3"
         self.conn.commit()
@@ -635,12 +658,28 @@ class WeddingLedgerDB:
         self._secure_db_file()
         return before_restore
 
-    def clear_test_data(self) -> Path:
-        backup = self.create_backup("before_clear_test")
+    def clear_test_data(self) -> int:
         test_ids = [row["id"] for row in self.conn.execute("SELECT id FROM entries WHERE mode = ?", (MODE_TEST,))]
         if test_ids:
             placeholders = ",".join("?" for _ in test_ids)
             self.conn.execute(f"DELETE FROM audit_logs WHERE entry_id IN ({placeholders})", test_ids)
         self.conn.execute("DELETE FROM entries WHERE mode = ?", (MODE_TEST,))
+        self.conn.execute("DELETE FROM lookup_items")
+        self._seed_lookup_items_from_entries()
         self.conn.commit()
-        return backup
+        return len(test_ids)
+
+    def clear_records_and_lookups(self) -> None:
+        self.conn.execute("DELETE FROM audit_logs")
+        self.conn.execute("DELETE FROM entries")
+        self.conn.execute("DELETE FROM lookup_items")
+        self._seed_lookup_items_from_entries()
+        self.conn.commit()
+
+    def reset_all_data(self) -> None:
+        self.conn.execute("DELETE FROM audit_logs")
+        self.conn.execute("DELETE FROM entries")
+        self.conn.execute("DELETE FROM lookup_items")
+        self.conn.execute("DELETE FROM settings")
+        self.conn.commit()
+        self._initialize()

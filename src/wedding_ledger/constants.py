@@ -1,5 +1,5 @@
 APP_NAME = "WeddingLedger"
-APP_TITLE = "신부측 축의대 장부"
+APP_TITLE = "축의대 장부"
 
 MODE_TEST = "test"
 MODE_LIVE = "live"

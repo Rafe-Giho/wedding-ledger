@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>축의대 장부</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="window">
+      <div class="traffic" aria-hidden="true">
+        <span class="red"></span>
+        <span class="yellow"></span>
+        <span class="green"></span>
+      </div>
+
+      <aside class="sidebar">
+        <div class="brand-mark" aria-hidden="true">⌘</div>
+        <h1>축의대 장부</h1>
+        <nav class="nav" aria-label="주요 메뉴">
+          <button class="nav-item active" data-section="entry"><span class="nav-icon">✎</span>입력</button>
+          <button class="nav-item" data-section="search"><span class="nav-icon">⌕</span>검색</button>
+          <button class="nav-item" data-section="summary"><span class="nav-icon">▣</span>정산</button>
+          <button class="nav-item" data-section="settings"><span class="nav-icon">⚙</span>설정</button>
+        </nav>
+        <svg class="floral" viewBox="0 0 220 320" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M35 286C88 235 92 174 122 123c18-31 41-52 63-72"/>
+            <path d="M70 250c-26-9-43-24-51-45 25-2 45 10 59 36"/>
+            <path d="M105 196c-28-16-42-39-42-68 31 7 49 29 54 63"/>
+            <path d="M139 141c-24-22-31-48-20-77 27 16 39 43 32 72"/>
+            <path d="M82 273c21-18 48-22 78-11-21 18-47 22-78 11z"/>
+            <path d="M112 225c20-18 45-23 76-15-18 20-45 25-76 15z"/>
+            <path d="M145 169c18-20 42-28 72-23-15 22-40 30-72 23z"/>
+            <circle cx="37" cy="198" r="18"/>
+            <circle cx="62" cy="238" r="16"/>
+            <circle cx="115" cy="126" r="18"/>
+            <circle cx="176" cy="61" r="15"/>
+            <path d="M28 198c10-12 22-12 33 0M52 238c8-10 20-11 31 0M105 126c10-12 23-12 35 0M168 61c7-9 17-9 25 0"/>
+          </g>
+        </svg>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="mode-pill" id="modeLabel">테스트 모드</div>
+          <label class="dark-toggle">
+            <span>다크 모드</span>
+            <span class="moon">☾</span>
+            <input id="darkSwitch" type="checkbox" />
+            <i></i>
+          </label>
+        </header>
+
+        <section id="entrySection" class="section active">
+          <div class="entry-card glass-card">
+            <h2>새로운 축의 입력</h2>
+            <form id="entryForm" autocomplete="off">
+              <div class="two-grid">
+                <label class="field-label">모임
+                  <span class="select-field">
+                    <span class="field-icon">♧</span>
+                    <input id="groupInput" list="groupList" value="미분류" />
+                    <b>⌄</b>
+                  </span>
+                </label>
+                <label class="field-label">관계
+                  <span class="select-field">
+                    <span class="field-icon">♙</span>
+                    <input id="relationshipInput" list="relationshipList" placeholder="관계 입력" />
+                    <b>⌄</b>
+                  </span>
+                </label>
+              </div>
+              <datalist id="groupList"></datalist>
+              <datalist id="relationshipList"></datalist>
+
+              <label class="field-label wide">이름
+                <input id="nameInput" class="soft-input" placeholder="이름을 입력하세요" required />
+              </label>
+
+              <div class="two-grid amount-row">
+                <label class="field-label">금액
+                  <span class="money-input"><span>₩</span><input id="amountInput" placeholder="금액을 입력하세요" inputmode="numeric" /></span>
+                </label>
+                <label class="field-label">식권
+                  <span class="ticket-stepper">
+                    <span>🍽</span>
+                    <button type="button" id="ticketMinus">−</button>
+                    <input id="ticketInput" value="0" inputmode="numeric" />
+                    <button type="button" id="ticketPlus">＋</button>
+                    <em>매</em>
+                  </span>
+                </label>
+              </div>
+
+              <label class="field-label">금액 빠른 선택</label>
+              <div class="quick-buttons" id="quickAmounts"></div>
+
+              <label class="field-label wide">메모 <small>(선택)</small>
+                <textarea id="memoInput" placeholder="메모를 입력하세요"></textarea>
+              </label>
+
+              <input id="envelopeInput" type="hidden" />
+              <button class="save-button" type="submit">저장</button>
+            </form>
+          </div>
+
+          <div class="right-stack">
+            <article class="history-card glass-card">
+              <div class="card-title-row">
+                <h2>최근 입력 내역</h2>
+                <button class="link-button" data-section-jump="search">전체 보기 ›</button>
+              </div>
+              <table>
+                <thead>
+                  <tr><th>이름</th><th>모임</th><th>관계</th><th>금액</th><th>식권</th><th>시간</th></tr>
+                </thead>
+                <tbody id="recentBody"></tbody>
+              </table>
+            </article>
+
+            <div class="stats-grid">
+              <article class="stat-card glass-card">
+                <div class="stat-head"><span>총 축의금</span><b>₩</b></div>
+                <strong id="totalAmount">0원</strong>
+                <p id="totalCount">건수 0건</p>
+              </article>
+              <article class="stat-card glass-card">
+                <div class="stat-head"><span>총 식권</span><b>🍽</b></div>
+                <strong id="totalTickets">0매</strong>
+                <p id="ticketDetail">사용 0매 ㅣ 남은 0매</p>
+              </article>
+              <article class="stat-card glass-card">
+                <div class="stat-head"><span>평균 축의금</span><b>▰</b></div>
+                <strong id="averageAmount">0원</strong>
+                <p>(축의금 기준)</p>
+              </article>
+            </div>
+
+            <article class="thanks-card glass-card">
+              <p>따뜻한 마음에 감사드립니다.</p>
+              <span>⌘</span>
+            </article>
+          </div>
+        </section>
+
+        <section id="searchSection" class="section">
+          <article class="glass-card page-card">
+            <h2>검색</h2>
+            <div class="search-grid">
+              <input id="searchName" placeholder="이름" />
+              <input id="searchGroup" placeholder="모임" />
+              <input id="searchMin" placeholder="최소 금액" inputmode="numeric" />
+              <input id="searchMax" placeholder="최대 금액" inputmode="numeric" />
+              <button id="searchButton">검색</button>
+            </div>
+            <table>
+              <thead><tr><th>봉투</th><th>이름</th><th>모임</th><th>관계</th><th>금액</th><th>식권</th><th>상태</th></tr></thead>
+              <tbody id="searchBody"></tbody>
+            </table>
+          </article>
+        </section>
+
+        <section id="summarySection" class="section">
+          <article class="glass-card page-card">
+            <h2>정산</h2>
+            <div class="summary-grid" id="summaryGrid"></div>
+            <h3>모임별 합계</h3>
+            <table>
+              <thead><tr><th>모임</th><th>건수</th><th>총액</th><th>식권</th></tr></thead>
+              <tbody id="groupSummaryBody"></tbody>
+            </table>
+          </article>
+        </section>
+
+        <section id="settingsSection" class="section">
+          <article class="glass-card page-card">
+            <h2>설정</h2>
+            <div class="settings-row">
+              <label>화면 테마</label>
+              <select id="themeSelect">
+                <option value="system">시스템 설정</option>
+                <option value="light">라이트</option>
+                <option value="dark">다크</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <label>현재 모드</label>
+              <div class="segmented">
+                <button id="testModeButton">테스트</button>
+                <button id="liveModeButton">운영</button>
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button id="exportButton">엑셀 추출</button>
+              <button id="lockButton">지금 잠금</button>
+              <button class="danger" id="resetTestButton">테스트 데이터 초기화</button>
+              <button class="danger" id="resetRecordsButton">기록/목록 초기화</button>
+              <button class="danger" id="resetAllButton">전체 초기화</button>
+            </div>
+            <p class="settings-note">로컬 Mac 안에만 저장됩니다. 백업 복원은 기존 Tkinter 화면 대신 다음 단계에서 웹 UI에 맞춰 다시 정리할 수 있습니다.</p>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <section id="authOverlay" class="auth-overlay hidden">
+      <div class="auth-card glass-card">
+        <h2 id="authTitle">잠금 해제</h2>
+        <p id="authDescription">비밀번호를 입력해 축의대 장부를 엽니다.</p>
+        <input id="passwordInput" type="password" placeholder="비밀번호" />
+        <input id="passwordConfirmInput" class="hidden" type="password" placeholder="비밀번호 확인" />
+        <button id="authButton" class="save-button">확인</button>
+        <pre id="recoveryBox" class="hidden"></pre>
+      </div>
+    </section>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

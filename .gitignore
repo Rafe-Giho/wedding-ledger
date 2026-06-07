@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .coverage
+.build/
+.swiftpm/
 
 # Local wedding data and exports must never be committed.
 .local-data/

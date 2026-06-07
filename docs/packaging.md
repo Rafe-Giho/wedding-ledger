@@ -15,7 +15,7 @@ python3 scripts/build_macos_app.py
 생성 결과:
 
 ```txt
-dist/WeddingLedger.app
+dist/축의대 장부.app
 ```
 
 이 번들은 앱 코드와 실행 스크립트를 포함한다. 실행할 맥에는 Python 3이 설치되어 있어야 한다.
