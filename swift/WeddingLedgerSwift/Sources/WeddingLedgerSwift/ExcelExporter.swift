@@ -229,7 +229,7 @@ private func detailRows(entries: [LedgerEntry]) -> [[XLSXCell]] {
     return rows
 }
 
-private func summaryRows(lastRow: Int) -> [[XLSXCell]] {
+private func summaryRows(lastRow: Int, settings: OperationSettings) -> [[XLSXCell]] {
     let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
     let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
     let ticketRange = "'전체내역'!$F$2:$F$\(lastRow)"
@@ -240,9 +240,13 @@ private func summaryRows(lastRow: Int) -> [[XLSXCell]] {
         [.text("정상 기록 수"), .formula("COUNTIF(\(statusRange),\"정상\")"), .text("취소 제외")],
         [.text("취소 기록 수"), .formula("COUNTIF(\(statusRange),\"취소\")"), .text("취소 처리된 기록")],
         [.text("총 봉투수"), .formula("COUNTIF(\(statusRange),\"정상\")"), .text("정상 기록 기준")],
+        [.text("예상 봉투수"), .number(settings.expectedEnvelopeCount), .text("설정값")],
+        [.text("봉투 차이"), .formula("IF(B5=0,\"\",B5-B4)"), .text("예상 봉투수 - 정상 기록 수")],
         [.text("총 축의금"), .formula("SUMIF(\(statusRange),\"정상\",\(amountRange))", style: styleMoney), .text("정상 기록 금액 합계")],
         [.text("평균 축의금"), .formula("IFERROR(AVERAGEIFS(\(amountRange),\(statusRange),\"정상\"),0)", style: styleMoney), .text("정상 기록 평균")],
         [.text("총 식권 수"), .formula("SUMIF(\(statusRange),\"정상\",\(ticketRange))"), .text("정상 기록 식권 합계")],
+        [.text("준비 식권 수"), .number(settings.totalMealTickets), .text("설정값")],
+        [.text("남은 식권 수"), .formula("IF(B10=0,\"\",B10-B9)"), .text("준비 식권 수 - 사용 식권 수")],
         [.text("현금 합계"), .formula("SUMIFS(\(amountRange),\(paymentRange),\"현금\",\(statusRange),\"정상\")", style: styleMoney), .text("")],
         [.text("계좌 합계"), .formula("SUMIFS(\(amountRange),\(paymentRange),\"계좌\",\(statusRange),\"정상\")", style: styleMoney), .text("")],
         [.text("기타 합계"), .formula("SUMIFS(\(amountRange),\(paymentRange),\"기타\",\(statusRange),\"정상\")", style: styleMoney), .text("")],
@@ -372,11 +376,15 @@ private func auditRows(_ auditRows: [[String: String]]) -> [[XLSXCell]] {
     return rows
 }
 
-private func guideRows(mode: LedgerMode, exportDate: String) -> [[XLSXCell]] {
+private func guideRows(mode: LedgerMode, exportDate: String, settings: OperationSettings) -> [[XLSXCell]] {
     [
         [.text("축의대 장부 엑셀 안내", style: styleTitle), .blank()],
+        [.text("행사명"), .text(settings.eventTitle.isEmpty ? "-" : settings.eventTitle)],
         [.text("추출 모드"), .text(mode.label)],
         [.text("추출 시간"), .text(exportDate)],
+        [.text("총 식권수"), .text(settings.totalMealTickets > 0 ? "\(settings.totalMealTickets)매" : "미설정")],
+        [.text("예상 봉투수"), .text(settings.expectedEnvelopeCount > 0 ? "\(settings.expectedEnvelopeCount)개" : "미설정")],
+        [.text("운영 메모"), .text(settings.operationNote.isEmpty ? "-" : settings.operationNote)],
         [.text("전체내역"), .text("원본 데이터입니다. 필터가 켜져 있고 입력시간은 초 단위까지 표시됩니다.")],
         [.text("요약"), .text("주요 수치는 전체내역을 참조하는 함수로 계산됩니다.")],
         [.text("검색용"), .text("B열 조건을 입력하면 A16부터 결과가 자동으로 펼쳐집니다.")],
@@ -399,7 +407,8 @@ private func createXLSXPackage(
     entries: [LedgerEntry],
     summary: LedgerSummary,
     auditRows rawAuditRows: [[String: String]],
-    mode: LedgerMode
+    mode: LedgerMode,
+    settings: OperationSettings
 ) throws {
     let fileManager = FileManager.default
     let xlURL = packageURL.appendingPathComponent("xl", isDirectory: true)
@@ -443,7 +452,7 @@ private func createXLSXPackage(
             conditionalFormatting: detailConditionalFormatting
         ),
         worksheetXML(
-            rows: summaryRows(lastRow: lastRow),
+            rows: summaryRows(lastRow: lastRow, settings: settings),
             columns: [.init(index: 1, width: 18), .init(index: 2, width: 20), .init(index: 3, width: 34)]
         ),
         worksheetXML(
@@ -471,7 +480,7 @@ private func createXLSXPackage(
             autoFilter: "A1:G\(max(rawAuditRows.count + 1, 2))"
         ),
         worksheetXML(
-            rows: guideRows(mode: mode, exportDate: nowString()),
+            rows: guideRows(mode: mode, exportDate: nowString(), settings: settings),
             columns: [.init(index: 1, width: 18), .init(index: 2, width: 72)]
         )
     ]
@@ -502,12 +511,19 @@ private func zipPackage(packageURL: URL, outputURL: URL) throws {
 }
 
 @discardableResult
-func exportXLSXFile(to url: URL, entries: [LedgerEntry], summary: LedgerSummary, auditRows: [[String: String]], mode: LedgerMode) throws -> URL {
+func exportXLSXFile(
+    to url: URL,
+    entries: [LedgerEntry],
+    summary: LedgerSummary,
+    auditRows: [[String: String]],
+    mode: LedgerMode,
+    settings: OperationSettings
+) throws -> URL {
     let output = url.pathExtension.lowercased() == "xlsx" ? url : url.deletingPathExtension().appendingPathExtension("xlsx")
     let tempURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("wedding-ledger-xlsx-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: tempURL) }
-    try createXLSXPackage(at: tempURL, entries: entries, summary: summary, auditRows: auditRows, mode: mode)
+    try createXLSXPackage(at: tempURL, entries: entries, summary: summary, auditRows: auditRows, mode: mode, settings: settings)
     try zipPackage(packageURL: tempURL, outputURL: output)
     return output
 }

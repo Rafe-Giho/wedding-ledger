@@ -97,6 +97,30 @@ struct RecoveryKeySheet: Identifiable {
     let key: String
 }
 
+enum GuidePage: String, Identifiable {
+    case tips
+    case checklist
+    case usage
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tips: "축의대 운영 TIP"
+        case .checklist: "당일 체크리스트"
+        case .usage: "프로그램 사용법"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .tips: "lightbulb"
+        case .checklist: "exclamationmark"
+        case .usage: "info"
+        }
+    }
+}
+
 struct ShellView: View {
     @Binding var section: SectionKey
 
@@ -280,6 +304,7 @@ struct BrandLockup: View {
 struct SidebarView: View {
     @EnvironmentObject private var state: AppState
     @Binding var section: SectionKey
+    @State private var guidePage: GuidePage?
     let width: CGFloat
 
     var body: some View {
@@ -300,6 +325,10 @@ struct SidebarView: View {
                 .stroke(AppColors.gold.opacity(0.34), lineWidth: 1.2)
                 .frame(width: width == 220 ? 170 : 220, height: 300)
                 .padding(.bottom, 18)
+            GuideButtonRow { page in
+                guidePage = page
+            }
+            .padding(.bottom, 14)
             Button("잠금") {
                 state.isUnlocked = false
             }
@@ -314,6 +343,44 @@ struct SidebarView: View {
         .frame(width: width)
         .background(AppColors.sidebar)
         .overlay(Rectangle().fill(AppColors.lineSoft).frame(width: 1), alignment: .trailing)
+        .sheet(item: $guidePage) { page in
+            GuideSheet(page: page)
+        }
+    }
+}
+
+struct GuideButtonRow: View {
+    let open: (GuidePage) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            GuideCircleButton(title: "TIP", systemImage: GuidePage.tips.symbol) { open(.tips) }
+            GuideCircleButton(title: "!", systemImage: GuidePage.checklist.symbol) { open(.checklist) }
+            GuideCircleButton(title: "i", systemImage: GuidePage.usage.symbol) { open(.usage) }
+        }
+    }
+}
+
+struct GuideCircleButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(title)
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(AppColors.gold)
+            .frame(width: 44, height: 44)
+            .background(AppColors.field, in: Circle())
+            .overlay(Circle().stroke(AppColors.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(title)
     }
 }
 
@@ -420,7 +487,8 @@ struct EntryDashboardView: View {
                 VStack(spacing: 18) {
                     RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    SummaryCardsRow()
+                    SummaryCardsRow(fillsHeight: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     ThanksCard()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -643,20 +711,41 @@ struct RecentEntriesCard: View {
 
 struct SummaryCardsRow: View {
     @EnvironmentObject private var state: AppState
+    var fillsHeight = false
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 18)], spacing: 18) {
-            StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign")
-            StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: "사용 \(state.summary.totalTickets)매 ㅣ 남은 0매", symbol: "fork.knife")
-            StatCard(title: "총 봉투수", value: "\(state.summary.activeCount)개", footnote: "정상 기록 기준", symbol: "envelope")
+        LazyVGrid(columns: columns, spacing: 18) {
+            StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign", fillsHeight: fillsHeight)
+            StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: ticketFootnote, symbol: "fork.knife", fillsHeight: fillsHeight)
+            StatCard(title: "총 봉투수", value: "\(state.summary.activeCount)개", footnote: envelopeFootnote, symbol: "envelope", fillsHeight: fillsHeight)
             StatCard(
                 title: "평균 축의금",
                 value: formatWon(state.summary.activeCount == 0 ? 0 : state.summary.totalAmount / state.summary.activeCount),
                 footnote: "(축의금 기준)",
-                symbol: "creditcard"
+                symbol: "creditcard",
+                fillsHeight: fillsHeight
             )
         }
         .frame(maxWidth: .infinity)
+        .frame(maxHeight: fillsHeight ? .infinity : nil)
+    }
+
+    private var columns: [GridItem] {
+        fillsHeight
+            ? [GridItem(.flexible(minimum: 160), spacing: 18), GridItem(.flexible(minimum: 160), spacing: 18)]
+            : [GridItem(.adaptive(minimum: 190), spacing: 18)]
+    }
+
+    private var ticketFootnote: String {
+        let total = state.operationSettings.totalMealTickets
+        guard total > 0 else { return "총 식권수를 설정하면 남은 매수 표시" }
+        return "준비 \(total)매 ㅣ 남은 \(max(0, total - state.summary.totalTickets))매"
+    }
+
+    private var envelopeFootnote: String {
+        let expected = state.operationSettings.expectedEnvelopeCount
+        guard expected > 0 else { return "정상 기록 기준" }
+        return "예상 \(expected)개 ㅣ 차이 \(expected - state.summary.activeCount)개"
     }
 }
 
@@ -770,13 +859,19 @@ struct SummaryView: View {
                     SummaryTile("누락 봉투", state.summary.envelopeGaps.isEmpty ? "없음" : state.summary.envelopeGaps.map(String.init).joined(separator: ", "))
                     SummaryTile("동명이인", duplicateSummaryText(state.summary.duplicateNames))
                 }
+                SettlementFocusGrid(section: $section)
                 DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
                     state.filterDuplicateName(duplicate.name)
                     section = .search
                 }
-                Text("모임별 합계")
-                    .font(.headline)
-                    .foregroundStyle(AppColors.text)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("모임별 합계")
+                        .font(.headline)
+                        .foregroundStyle(AppColors.text)
+                    Text("소속을 입력한 하객이 있을 때 참고용으로 확인하세요. 마감 검수는 위 카드가 우선입니다.")
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.muted)
+                }
                 Table(state.summary.groupTotals) {
                     TableColumn("모임", value: \.groupName)
                     TableColumn("건수") { Text("\($0.count)") }
@@ -789,6 +884,114 @@ struct SummaryView: View {
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
         .frame(height: layout == .compact ? nil : availableHeight)
+    }
+}
+
+struct SettlementFocusGrid: View {
+    @EnvironmentObject private var state: AppState
+    @Binding var section: SectionKey
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 12)], spacing: 12) {
+            SettlementCheckCard(
+                title: "봉투 대조",
+                value: "\(state.summary.activeCount)개",
+                detail: envelopeDetail,
+                symbol: "envelope.open"
+            )
+            SettlementCheckCard(
+                title: "식권 대조",
+                value: "\(state.summary.totalTickets)매",
+                detail: ticketDetail,
+                symbol: "ticket"
+            )
+            SettlementCheckCard(
+                title: "현금 확인",
+                value: formatWon(state.summary.paymentTotals[.cash] ?? 0),
+                detail: "실물 현금과 반드시 대조",
+                symbol: "banknote"
+            )
+            SettlementCheckCard(
+                title: "계좌 확인",
+                value: formatWon(state.summary.paymentTotals[.transfer] ?? 0),
+                detail: "계좌 입금 내역과 대조",
+                symbol: "creditcard"
+            )
+            SettlementCheckCard(
+                title: "누락 봉투",
+                value: state.summary.envelopeGaps.isEmpty ? "없음" : "\(state.summary.envelopeGaps.count)개",
+                detail: state.summary.envelopeGaps.prefix(6).map(String.init).joined(separator: ", "),
+                symbol: "number"
+            )
+            Button {
+                if let duplicate = state.summary.duplicateNames.first {
+                    state.filterDuplicateName(duplicate.name)
+                    section = .search
+                }
+            } label: {
+                SettlementCheckCard(
+                    title: "동명이인",
+                    value: state.summary.duplicateNames.isEmpty ? "없음" : "\(state.summary.duplicateNames.count)건",
+                    detail: duplicateDetail,
+                    symbol: "person.2"
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(state.summary.duplicateNames.isEmpty)
+        }
+    }
+
+    private var envelopeDetail: String {
+        let expected = state.operationSettings.expectedEnvelopeCount
+        guard expected > 0 else { return "예상 봉투수를 설정하면 차이 표시" }
+        return "예상 \(expected)개 ㅣ 차이 \(expected - state.summary.activeCount)개"
+    }
+
+    private var ticketDetail: String {
+        let total = state.operationSettings.totalMealTickets
+        guard total > 0 else { return "총 식권수를 설정하면 남은 매수 표시" }
+        return "준비 \(total)매 ㅣ 남은 \(max(0, total - state.summary.totalTickets))매"
+    }
+
+    private var duplicateDetail: String {
+        state.summary.duplicateNames.isEmpty
+            ? "같은 이름 없음"
+            : state.summary.duplicateNames.prefix(2).map { "\($0.name) \($0.count)명" }.joined(separator: ", ")
+    }
+}
+
+struct SettlementCheckCard: View {
+    let title: String
+    let value: String
+    let detail: String
+    let symbol: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .foregroundStyle(AppColors.gold)
+                .frame(width: 32, height: 32)
+                .background(AppColors.goldSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.muted)
+                Text(value)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AppColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(detail.isEmpty ? "-" : detail)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.muted)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
+        .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.line.opacity(0.48), lineWidth: 1))
     }
 }
 
@@ -855,6 +1058,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .frame(width: 180)
                 }
+                OperationSettingsPanel()
                 VStack(alignment: .leading, spacing: 8) {
                     Text("데이터 위치")
                         .font(.headline)
@@ -904,6 +1108,208 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             state.restoreBackup(from: url)
         }
+    }
+}
+
+struct OperationSettingsPanel: View {
+    @EnvironmentObject private var state: AppState
+    @State private var eventTitle = ""
+    @State private var totalMealTickets = ""
+    @State private var expectedEnvelopeCount = ""
+    @State private var operationNote = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("운영 설정")
+                        .font(.headline)
+                        .foregroundStyle(AppColors.text)
+                    Text("정산 검수와 안내 페이지에 함께 반영됩니다.")
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.muted)
+                }
+                Spacer()
+                PillButton("저장", action: save)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
+                SoftTextField("행사명", text: $eventTitle)
+                SoftTextField("총 식권수", text: $totalMealTickets)
+                    .onChange(of: totalMealTickets) { _, value in totalMealTickets = formatSettingNumber(value) }
+                SoftTextField("예상 봉투수", text: $expectedEnvelopeCount)
+                    .onChange(of: expectedEnvelopeCount) { _, value in expectedEnvelopeCount = formatSettingNumber(value) }
+            }
+            TextEditor(text: $operationNote)
+                .frame(minHeight: 76)
+                .padding(10)
+                .scrollContentBackground(.hidden)
+                .background(AppColors.field, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppColors.line, lineWidth: 1))
+        }
+        .padding(.vertical, 18)
+        .overlay(Rectangle().fill(AppColors.lineSoft).frame(height: 1), alignment: .bottom)
+        .onAppear(perform: sync)
+        .onChange(of: state.operationSettings) { _, _ in sync() }
+    }
+
+    private func sync() {
+        eventTitle = state.operationSettings.eventTitle
+        totalMealTickets = state.operationSettings.totalMealTickets > 0 ? formatNumber(state.operationSettings.totalMealTickets) : ""
+        expectedEnvelopeCount = state.operationSettings.expectedEnvelopeCount > 0 ? formatNumber(state.operationSettings.expectedEnvelopeCount) : ""
+        operationNote = state.operationSettings.operationNote
+    }
+
+    private func save() {
+        state.saveOperationSettings(
+            OperationSettings(
+                eventTitle: eventTitle,
+                totalMealTickets: parseAmount(totalMealTickets),
+                expectedEnvelopeCount: parseAmount(expectedEnvelopeCount),
+                operationNote: operationNote
+            )
+        )
+    }
+
+    private func formatSettingNumber(_ value: String) -> String {
+        let number = parseAmount(value)
+        return number > 0 ? formatNumber(number) : ""
+    }
+}
+
+struct GuideSheet: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    let page: GuidePage
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: page.symbol)
+                        .foregroundStyle(AppColors.gold)
+                        .frame(width: 42, height: 42)
+                        .background(AppColors.goldSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(page.title)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(AppColors.text)
+                        Text(state.operationSettings.eventTitle.isEmpty ? "현장 운영 가이드" : state.operationSettings.eventTitle)
+                            .font(.subheadline)
+                            .foregroundStyle(AppColors.muted)
+                    }
+                    Spacer()
+                    Button("닫기") { dismiss() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppColors.text)
+                }
+                ForEach(guideSections(for: page, settings: state.operationSettings)) { section in
+                    GuideSectionCard(section: section)
+                }
+                Text("참고 링크: https://naver.me/FSvx9k1K")
+                    .font(.footnote)
+                    .foregroundStyle(AppColors.muted)
+                    .textSelection(.enabled)
+                Text("제공된 링크는 네이버 카페 앱/로그인 권한이 필요한 형태라 본문 원문은 앱에 복제하지 않았습니다. 아래 내용은 축의대 운영 일반 프로세스와 이 앱 사용 흐름을 기준으로 정리했습니다.")
+                    .font(.footnote)
+                    .foregroundStyle(AppColors.muted)
+            }
+            .padding(28)
+        }
+        .frame(width: 660, height: 640)
+        .background(AppColors.window)
+    }
+}
+
+struct GuideSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let items: [String]
+}
+
+struct GuideSectionCard: View {
+    let section: GuideSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(section.title)
+                .font(.headline)
+                .foregroundStyle(AppColors.text)
+            ForEach(section.items, id: \.self) { item in
+                HStack(alignment: .top, spacing: 10) {
+                    Circle()
+                        .fill(AppColors.gold)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 7)
+                    Text(item)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.line.opacity(0.5), lineWidth: 1))
+    }
+}
+
+private func guideSections(for page: GuidePage, settings: OperationSettings) -> [GuideSection] {
+    switch page {
+    case .tips:
+        return [
+            GuideSection(title: "운영 배치", items: [
+                "봉투를 받은 즉시 봉투번호, 이름, 금액, 식권 수를 입력하고 저장합니다.",
+                "현금 봉투와 계좌 이체는 입금방식을 반드시 구분해 마감 때 대조 시간을 줄입니다.",
+                "모임과 관계는 알 수 있을 때만 입력하고, 이름만 있는 하객은 억지로 분류하지 않습니다.",
+                "동명이인이 뜨면 기존 봉투번호와 금액을 확인한 뒤 새 동명이인으로 저장합니다."
+            ]),
+            GuideSection(title: "실수 줄이기", items: [
+                "만원 단위 빠른 선택과 +1만원 버튼을 먼저 사용하고 특이 금액만 직접 입력합니다.",
+                "식권은 실제 전달한 수량만 기록하고, 나중에 줄 예정인 식권은 메모로 남깁니다.",
+                "봉투번호가 비면 실물 봉투 순서와 앱 기록 순서가 어긋난 것이므로 즉시 확인합니다.",
+                "운영 모드 전환 전 테스트 데이터 초기화를 먼저 끝냅니다."
+            ])
+        ]
+    case .checklist:
+        return [
+            GuideSection(title: "행사 전", items: [
+                "비밀번호와 복구키를 확인합니다.",
+                "테스트 모드에서 3건 이상 입력해 저장, 검색, 취소, 복구, 엑셀 추출을 점검합니다.",
+                settings.totalMealTickets > 0 ? "설정된 총 식권수: \(settings.totalMealTickets)매" : "설정에서 총 식권수를 입력해 남은 식권을 볼 수 있게 합니다.",
+                settings.expectedEnvelopeCount > 0 ? "설정된 예상 봉투수: \(settings.expectedEnvelopeCount)개" : "예상 봉투수가 있으면 설정에 입력해 봉투 차이를 확인합니다."
+            ]),
+            GuideSection(title: "운영 중", items: [
+                "저장 후 최근 입력 내역에서 봉투번호와 이름이 맞는지 바로 확인합니다.",
+                "동명이인, 누락 봉투, 과도하게 큰 금액은 바로 메모 또는 검색으로 재확인합니다.",
+                "식권 잔여량이 빠르게 줄면 정산 탭의 식권 대조 카드를 수시로 봅니다."
+            ]),
+            GuideSection(title: "마감", items: [
+                "정산 탭에서 현금 합계를 실물 현금과 대조합니다.",
+                "계좌 합계를 계좌 입금 내역과 대조합니다.",
+                "누락 봉투와 동명이인 목록을 확인합니다.",
+                "엑셀 추출 전에 수동 백업을 만들고, 추출 파일을 별도 위치에 보관합니다."
+            ])
+        ]
+    case .usage:
+        return [
+            GuideSection(title: "입력", items: [
+                "봉투번호는 자동 증가하지만 필요하면 직접 수정할 수 있습니다.",
+                "이름과 금액은 필수이며, 식권 수는 기본 0매입니다.",
+                "모임과 관계는 직접 입력하면 이후 목록에서 다시 선택할 수 있습니다.",
+                "같은 이름이 있으면 기존 기록이 즉시 표시되고 새 동명이인 저장 여부를 고를 수 있습니다."
+            ]),
+            GuideSection(title: "검색/정산", items: [
+                "검색에서는 이름, 모임, 금액 범위, 식권수, 입금방식, 상태로 기록을 찾습니다.",
+                "정산에서는 봉투 대조, 식권 대조, 현금 확인, 계좌 확인 카드를 먼저 확인합니다.",
+                "모임별 합계는 소속을 입력한 기록이 있을 때 참고용으로만 봅니다."
+            ]),
+            GuideSection(title: "설정/엑셀", items: [
+                "설정에서 총 식권수와 예상 봉투수를 입력하면 입력과 정산 카드에 남은 수량과 차이가 표시됩니다.",
+                "엑셀 추출은 전체내역, 요약, 검색용, 시간대별, 동명이인, 수정이력 시트를 포함합니다.",
+                "백업 복원 전에는 현재 DB가 자동 백업됩니다."
+            ])
+        ]
     }
 }
 

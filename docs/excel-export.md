@@ -46,9 +46,11 @@
 - 정상 기록 수: `COUNTIF`
 - 취소 기록 수: `COUNTIF`
 - 총 봉투수: `COUNTIF`
+- 예상 봉투수와 봉투 차이: 설정값과 수식
 - 총 축의금: `SUMIF`
 - 평균 축의금: `AVERAGEIFS`
 - 총 식권 수: `SUMIF`
+- 준비 식권 수와 남은 식권 수: 설정값과 수식
 - 결제수단별 합계: `SUMIFS`
 - 최초/최근 입력시간: `MINIFS`, `MAXIFS`, `TEXT`
 

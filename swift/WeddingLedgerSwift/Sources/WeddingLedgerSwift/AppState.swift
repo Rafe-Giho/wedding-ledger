@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
     @Published var searchResults: [LedgerEntry] = []
     @Published var searchFilters = EntryFilters()
     @Published var summary: LedgerSummary = .empty
+    @Published var operationSettings: OperationSettings = .empty
     @Published var duplicateMatches: [LedgerEntry] = []
     @Published var groups: [String] = [defaultGroup]
     @Published var relationships: [String] = []
@@ -30,6 +31,7 @@ final class AppState: ObservableObject {
             isConfigured = store.isConfigured()
             mode = store.mode()
             themePreference = store.themePreference()
+            operationSettings = store.operationSettings()
             draft.envelopeNo = try store.nextEnvelopeNo(mode: mode)
             groups = try store.recentGroups()
             relationships = try store.recentRelationships()
@@ -126,6 +128,16 @@ final class AppState: ObservableObject {
         do {
             try store.setThemePreference(preference)
             themePreference = preference
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func saveOperationSettings(_ settings: OperationSettings) {
+        do {
+            try store.setOperationSettings(settings)
+            operationSettings = store.operationSettings()
+            message = "운영 설정을 저장했습니다."
         } catch {
             message = error.localizedDescription
         }

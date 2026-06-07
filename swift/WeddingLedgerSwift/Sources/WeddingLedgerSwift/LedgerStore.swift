@@ -189,6 +189,22 @@ final class LedgerStore {
         try setSetting("theme_preference", preference.rawValue)
     }
 
+    func operationSettings() -> OperationSettings {
+        OperationSettings(
+            eventTitle: getSetting("event_title") ?? "",
+            totalMealTickets: Int(getSetting("total_meal_tickets") ?? "") ?? 0,
+            expectedEnvelopeCount: Int(getSetting("expected_envelope_count") ?? "") ?? 0,
+            operationNote: getSetting("operation_note") ?? ""
+        )
+    }
+
+    func setOperationSettings(_ settings: OperationSettings) throws {
+        try setSetting("event_title", settings.eventTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+        try setSetting("total_meal_tickets", String(max(0, settings.totalMealTickets)))
+        try setSetting("expected_envelope_count", String(max(0, settings.expectedEnvelopeCount)))
+        try setSetting("operation_note", settings.operationNote.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     func nextEnvelopeNo(mode: LedgerMode? = nil) throws -> Int {
         let mode = mode ?? self.mode()
         let rows = try db.query("SELECT COALESCE(MAX(envelope_no), 0) + 1 AS next_no FROM entries WHERE mode = ?", [.text(mode.rawValue)])
@@ -404,7 +420,14 @@ final class LedgerStore {
         let exportMode = mode ?? self.mode()
         let entries = try findEntries(mode: exportMode)
         let summary = try summary(mode: exportMode)
-        let output = try exportXLSXFile(to: url, entries: entries, summary: summary, auditRows: auditRows(), mode: exportMode)
+        let output = try exportXLSXFile(
+            to: url,
+            entries: entries,
+            summary: summary,
+            auditRows: auditRows(),
+            mode: exportMode,
+            settings: operationSettings()
+        )
         chmod(output.path, 0o600)
         return output
     }

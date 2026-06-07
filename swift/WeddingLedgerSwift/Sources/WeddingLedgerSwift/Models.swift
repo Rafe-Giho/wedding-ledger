@@ -30,6 +30,15 @@ struct DuplicateName: Identifiable, Equatable {
     let count: Int
 }
 
+struct OperationSettings: Equatable {
+    var eventTitle = ""
+    var totalMealTickets = 0
+    var expectedEnvelopeCount = 0
+    var operationNote = ""
+
+    static let empty = OperationSettings()
+}
+
 struct LedgerSummary: Equatable {
     var mode: LedgerMode
     var activeCount: Int

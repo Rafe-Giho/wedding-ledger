@@ -124,6 +124,7 @@ struct StatCard: View {
     let value: String
     let footnote: String
     let symbol: String
+    var fillsHeight = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -146,7 +147,7 @@ struct StatCard: View {
                 .foregroundStyle(AppColors.muted)
         }
         .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 164)
+        .frame(maxWidth: .infinity, minHeight: 164, maxHeight: fillsHeight ? .infinity : nil)
         .background(AppColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.48)))
     }
