@@ -26,7 +26,7 @@ dist/축의대 장부.app
 
 ## 버전
 
-현재 Swift 앱 번들 버전은 `1.1.2`이다.
+현재 Swift 앱 번들 버전은 `1.1.3`이다.
 
 ## 코드 서명
 
@@ -36,15 +36,25 @@ dist/축의대 장부.app
 codesign --verify --deep --strict --verbose=2 "dist/축의대 장부.app"
 ```
 
-Apple Developer ID 공증은 아직 적용하지 않았다. GitHub에서 내려받은 앱이 macOS에서 `손상되었기 때문에 열 수 없습니다`라고 표시되면 실제 파일 손상보다 Gatekeeper 격리 속성 때문일 가능성이 높다.
+Apple Developer ID 공증은 아직 적용하지 않았다. GitHub에서 내려받은 앱이 macOS에서 `손상되었기 때문에 열 수 없습니다` 또는 `Apple은 악성 코드가 없음을 확인할 수 없습니다`라고 표시되면 실제 파일 손상보다 Gatekeeper 격리 속성 때문일 가능성이 높다.
 
-해결:
+권장 설치:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Rafe-Giho/wedding-ledger/main/scripts/install_macos.sh)"
+```
+
+이 명령은 릴리즈 zip을 터미널에서 내려받아 `~/Applications/축의대 장부.app`에 설치하고 quarantine 속성을 제거한 뒤 실행한다.
+
+브라우저로 zip을 직접 받은 경우:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/축의대 장부.app"
 ```
 
 또는 Finder에서 앱을 Control-클릭한 뒤 `열기`를 선택한다.
+
+더블클릭만으로 완전히 경고 없는 배포를 하려면 Apple Developer ID 인증서로 서명하고 notarization을 완료해야 한다.
 
 ## 레거시
 

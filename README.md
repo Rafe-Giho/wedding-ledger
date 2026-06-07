@@ -26,6 +26,14 @@
 dist/축의대 장부.app
 ```
 
+권장 설치:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Rafe-Giho/wedding-ledger/main/scripts/install_macos.sh)"
+```
+
+위 명령은 최신 릴리즈 앱을 `~/Applications/축의대 장부.app`에 설치하고 macOS 격리 속성을 제거한 뒤 실행합니다.
+
 개발 실행:
 
 ```bash
@@ -48,7 +56,7 @@ dist/축의대 장부.app
 
 GitHub에서 받은 앱이 `손상되었기 때문에 열 수 없습니다`라고 나오면, 실제 파일 손상보다 macOS Gatekeeper 격리 속성 때문일 가능성이 높습니다.
 
-앱을 `응용 프로그램` 폴더로 옮긴 뒤 아래 명령을 한 번 실행하세요.
+가장 쉬운 해결 방법은 위의 권장 설치 명령을 사용하는 것입니다. 브라우저에서 zip을 직접 받은 경우에는 앱을 `응용 프로그램` 폴더로 옮긴 뒤 아래 명령을 한 번 실행하세요.
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/축의대 장부.app"
