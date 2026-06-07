@@ -3,8 +3,12 @@ set -eu
 
 VERSION="${WEDDING_LEDGER_VERSION:-v1.1.3}"
 REPO="Rafe-Giho/wedding-ledger"
-ASSET="wedding-ledger-${VERSION#v}-macOS.zip"
-URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET}"
+case "$VERSION" in
+  v*) TAG="$VERSION" ;;
+  *) TAG="v$VERSION" ;;
+esac
+ASSET="wedding-ledger-${TAG}-macOS.zip"
+URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 INSTALL_DIR="${WEDDING_LEDGER_INSTALL_DIR:-$HOME/Applications}"
 APP_NAME="축의대 장부.app"
 TMP_DIR="$(mktemp -d)"
