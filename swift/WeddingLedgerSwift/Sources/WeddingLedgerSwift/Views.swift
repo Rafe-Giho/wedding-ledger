@@ -140,70 +140,14 @@ struct ShellView: View {
                         WorkspaceContent(section: $section, layout: layout)
                     }
                 }
-                WindowZoomStrip()
-                    .frame(height: 36)
-                    .padding(.leading, 74)
-                    .padding(.trailing, 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                VersionBadge()
+                    .padding(.trailing, layout.contentPadding)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .zIndex(20)
             }
         }
         .background(AppColors.background)
-    }
-}
-
-struct WindowZoomStrip: NSViewRepresentable {
-    func makeNSView(context: Context) -> WindowZoomStripView {
-        WindowZoomStripView()
-    }
-
-    func updateNSView(_ nsView: WindowZoomStripView, context: Context) {}
-}
-
-final class WindowZoomStripView: NSView {
-    private var restoreFrame: NSRect?
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let window else {
-            super.mouseDown(with: event)
-            return
-        }
-        if event.clickCount == 2 {
-            toggleWindowFill(window)
-        } else {
-            window.performDrag(with: event)
-        }
-    }
-
-    private func toggleWindowFill(_ window: NSWindow) {
-        guard let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else {
-            window.performZoom(nil)
-            return
-        }
-        if window.frame.isClose(to: visibleFrame) {
-            if let restoreFrame {
-                window.setFrame(restoreFrame, display: true, animate: true)
-                self.restoreFrame = nil
-            } else {
-                window.performZoom(nil)
-            }
-            return
-        }
-        restoreFrame = window.frame
-        window.setFrame(visibleFrame, display: true, animate: true)
-    }
-}
-
-private extension NSRect {
-    func isClose(to other: NSRect) -> Bool {
-        abs(origin.x - other.origin.x) < 4 &&
-        abs(origin.y - other.origin.y) < 4 &&
-        abs(size.width - other.size.width) < 4 &&
-        abs(size.height - other.size.height) < 4
     }
 }
 
@@ -219,6 +163,18 @@ struct WindowBackground: View {
             )
         }
         .ignoresSafeArea()
+    }
+}
+
+struct VersionBadge: View {
+    var body: some View {
+        Text("v\(appVersion)")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(AppColors.muted.opacity(0.72))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(AppColors.field.opacity(0.72), in: Capsule())
+            .overlay(Capsule().stroke(AppColors.lineSoft.opacity(0.55), lineWidth: 1))
     }
 }
 
@@ -543,115 +499,135 @@ struct EntryFormView: View {
     var body: some View {
         let dense = fillsHeight && !compact
         Card(padding: compact ? 18 : (dense ? 18 : 20), fillsAvailableSpace: fillsHeight) {
-            VStack(alignment: .leading, spacing: dense ? 9 : 12) {
-                Text("새로운 축의 입력")
-                    .font(.system(size: dense ? 21 : 22, weight: .bold))
-                    .foregroundStyle(AppColors.text)
-                AdaptivePair(stacked: compact) {
-                    FieldLabel("봉투번호") {
-                        TextField("봉투번호", value: $state.draft.envelopeNo, format: .number)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 18, weight: .semibold))
+            if fillsHeight {
+                VStack(alignment: .leading, spacing: dense ? 10 : 12) {
+                    ScrollView {
+                        formFields(dense: dense)
+                            .padding(.trailing, 4)
                     }
-                } second: {
-                    FieldLabel("입금방식") {
-                        Picker("", selection: $state.draft.paymentMethod) {
-                            ForEach(PaymentMethod.allCases) { method in
-                                Text(method.label).tag(method)
-                            }
-                        }
-                        .labelsHidden()
-                    }
+                    .scrollIndicators(.visible)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    formAction(dense: dense)
                 }
-                AdaptivePair(stacked: compact) {
-                    FieldLabel("모임") {
-                        SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
-                    }
-                } second: {
-                    FieldLabel("관계") {
-                        SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
-                    }
+                .frame(maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                VStack(alignment: .leading, spacing: dense ? 9 : 12) {
+                    formFields(dense: dense)
+                    formAction(dense: dense)
                 }
-                FieldLabel("이름") {
-                    TextField("이름을 입력하세요", text: $state.draft.name)
+            }
+        }
+    }
+
+    private func formFields(dense: Bool) -> some View {
+        VStack(alignment: .leading, spacing: dense ? 9 : 12) {
+            Text("새로운 축의 입력")
+                .font(.system(size: dense ? 21 : 22, weight: .bold))
+                .foregroundStyle(AppColors.text)
+            AdaptivePair(stacked: compact) {
+                FieldLabel("봉투번호") {
+                    TextField("봉투번호", value: $state.draft.envelopeNo, format: .number)
                         .textFieldStyle(.plain)
-                        .focused($nameFocused)
-                        .onChange(of: state.draft.name) { _, _ in
-                            state.updateDuplicateMatches()
-                        }
+                        .font(.system(size: 18, weight: .semibold))
                 }
-                AdaptivePair(stacked: compact) {
-                    FieldLabel("금액") {
-                        HStack {
-                            Text("₩").foregroundStyle(AppColors.muted)
-                            TextField("금액을 입력하세요", text: $state.draft.amountText)
-                                .textFieldStyle(.plain)
-                                .onChange(of: state.draft.amountText) { _, value in
-                                    let amount = parseAmount(value)
-                                    state.draft.amountText = amount > 0 ? formatNumber(amount) : ""
-                                }
+            } second: {
+                FieldLabel("입금방식") {
+                    Picker("", selection: $state.draft.paymentMethod) {
+                        ForEach(PaymentMethod.allCases) { method in
+                            Text(method.label).tag(method)
                         }
                     }
-                } second: {
-                    FieldLabel("식권") {
-                        HStack(spacing: 10) {
-                            Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
-                            Button("-") { state.draft.mealTicketCount = max(0, state.draft.mealTicketCount - 1) }
-                            Text("\(state.draft.mealTicketCount)")
-                                .frame(width: 30)
-                            Button("+") { state.draft.mealTicketCount += 1 }
-                            Text("매")
-                        }
-                        .buttonStyle(.borderless)
-                    }
+                    .labelsHidden()
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("금액 빠른 선택")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AppColors.text)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: dense ? 86 : 92), spacing: dense ? 8 : 10)], spacing: dense ? 8 : 10) {
-                        ForEach(defaultQuickAmounts, id: \.self) { amount in
-                            PillButton(formatNumber(amount)) {
-                                state.draft.amountText = formatNumber(amount)
+            }
+            AdaptivePair(stacked: compact) {
+                FieldLabel("모임") {
+                    SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
+                }
+            } second: {
+                FieldLabel("관계") {
+                    SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
+                }
+            }
+            FieldLabel("이름") {
+                TextField("이름을 입력하세요", text: $state.draft.name)
+                    .textFieldStyle(.plain)
+                    .focused($nameFocused)
+                    .onChange(of: state.draft.name) { _, _ in
+                        state.updateDuplicateMatches()
+                    }
+            }
+            AdaptivePair(stacked: compact) {
+                FieldLabel("금액") {
+                    HStack {
+                        Text("₩").foregroundStyle(AppColors.muted)
+                        TextField("금액을 입력하세요", text: $state.draft.amountText)
+                            .textFieldStyle(.plain)
+                            .onChange(of: state.draft.amountText) { _, value in
+                                let amount = parseAmount(value)
+                                state.draft.amountText = amount > 0 ? formatNumber(amount) : ""
                             }
-                        }
-                        PillButton("+1만원", outlined: true) {
-                            state.draft.amountText = formatNumber(state.draft.amount + 10_000)
-                        }
                     }
                 }
-                FieldLabel("메모 (선택)") {
-                    TextEditor(text: $state.draft.memo)
-                        .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
-                        .scrollContentBackground(.hidden)
-                }
-                if fillsHeight {
-                    Spacer(minLength: 0)
-                }
-                if state.duplicateMatches.isEmpty {
-                    Button {
-                        state.saveEntry()
-                        nameFocused = true
-                    } label: {
-                        Text("저장")
-                            .font(.system(size: 20, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: dense ? 48 : 52)
-                            .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .foregroundStyle(AppColors.window)
+            } second: {
+                FieldLabel("식권") {
+                    HStack(spacing: 10) {
+                        Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
+                        Button("-") { state.draft.mealTicketCount = max(0, state.draft.mealTicketCount - 1) }
+                        Text("\(state.draft.mealTicketCount)")
+                            .frame(width: 30)
+                        Button("+") { state.draft.mealTicketCount += 1 }
+                        Text("매")
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    DuplicateNameReviewCard(matches: state.duplicateMatches) {
-                        state.saveEntry(forceDuplicate: true)
-                        nameFocused = true
-                    } cancel: {
-                        state.cancelDuplicateReview()
-                        nameFocused = true
+                    .buttonStyle(.borderless)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("금액 빠른 선택")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppColors.text)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: dense ? 86 : 92), spacing: dense ? 8 : 10)], spacing: dense ? 8 : 10) {
+                    ForEach(defaultQuickAmounts, id: \.self) { amount in
+                        PillButton(formatNumber(amount)) {
+                            state.draft.amountText = formatNumber(amount)
+                        }
+                    }
+                    PillButton("+1만원", outlined: true) {
+                        state.draft.amountText = formatNumber(state.draft.amount + 10_000)
                     }
                 }
             }
-            .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
+            FieldLabel("메모 (선택)") {
+                TextEditor(text: $state.draft.memo)
+                    .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
+                    .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func formAction(dense: Bool) -> some View {
+        if state.duplicateMatches.isEmpty {
+            Button {
+                state.saveEntry()
+                nameFocused = true
+            } label: {
+                Text("저장")
+                    .font(.system(size: 20, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: dense ? 48 : 52)
+                    .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .foregroundStyle(AppColors.window)
+            }
+            .buttonStyle(.plain)
+        } else {
+            DuplicateNameReviewCard(matches: state.duplicateMatches) {
+                state.saveEntry(forceDuplicate: true)
+                nameFocused = true
+            } cancel: {
+                state.cancelDuplicateReview()
+                nameFocused = true
+            }
         }
     }
 }
