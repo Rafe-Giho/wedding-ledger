@@ -354,13 +354,15 @@ struct EntryDashboardView: View {
         } else {
             HStack(alignment: .top, spacing: 18) {
                 EntryFormView(compact: false)
-                    .frame(width: layout.entryFormWidth)
+                    .frame(minWidth: layout.entryFormWidth, maxWidth: 640)
                 VStack(spacing: 18) {
                     RecentEntriesCard(listHeight: layout.recentEntriesHeight) { section = .search }
                     SummaryCardsRow()
                     ThanksCard()
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 }
@@ -513,6 +515,7 @@ struct SummaryCardsRow: View {
                 symbol: "creditcard"
             )
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -774,6 +777,8 @@ struct PasswordResetView: View {
 }
 
 struct RecoveryKeyView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var didCopy = false
     let recoveryKey: String
 
     var body: some View {
@@ -787,9 +792,20 @@ struct RecoveryKeyView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
-            Text("이 창을 닫아도 앱은 계속 사용할 수 있습니다.")
+            Text(didCopy ? "복구키가 클립보드에 복사되었습니다." : "이 창을 닫아도 앱은 계속 사용할 수 있습니다.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            HStack {
+                Button("복사") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(recoveryKey, forType: .string)
+                    didCopy = true
+                }
+                .buttonStyle(.borderedProminent)
+                Spacer()
+                Button("확인") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(28)
         .frame(width: 520)

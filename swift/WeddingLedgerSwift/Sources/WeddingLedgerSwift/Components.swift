@@ -26,6 +26,7 @@ struct Card<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(AppColors.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
