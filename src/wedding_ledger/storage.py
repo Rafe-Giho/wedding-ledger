@@ -24,6 +24,7 @@ from .security import (
     generate_recovery_key,
     generate_salt,
     hash_secret,
+    normalize_keyboard_secret,
     normalize_recovery_key,
     verify_secret,
 )
@@ -160,9 +161,10 @@ class WeddingLedgerDB:
 
     def setup_auth(self, password: str) -> str:
         if self.is_configured():
-            raise ValueError("이미 PIN이 설정되어 있습니다.")
-        if len(password) < 4:
-            raise ValueError("PIN은 4자리 이상이어야 합니다.")
+            raise ValueError("이미 비밀번호가 설정되어 있습니다.")
+        normalized_password = normalize_keyboard_secret(password)
+        if len(normalized_password) < 4:
+            raise ValueError("비밀번호는 4자 이상이어야 합니다.")
 
         password_salt = generate_salt()
         recovery_salt = generate_salt()
@@ -170,7 +172,7 @@ class WeddingLedgerDB:
         normalized_recovery_key = normalize_recovery_key(recovery_key)
 
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("recovery_salt", recovery_salt)
         self.set_setting("recovery_hash", hash_secret(normalized_recovery_key, recovery_salt))
@@ -184,11 +186,13 @@ class WeddingLedgerDB:
         iterations = int(self.get_setting("password_iterations") or PBKDF2_ITERATIONS)
         if not salt or not expected:
             return False
-        return verify_secret(password, salt, expected, iterations)
+        normalized_password = normalize_keyboard_secret(password)
+        return verify_secret(normalized_password, salt, expected, iterations) or verify_secret(password, salt, expected, iterations)
 
     def reset_password_with_recovery(self, recovery_key: str, new_password: str) -> bool:
-        if len(new_password) < 4:
-            raise ValueError("새 PIN은 4자리 이상이어야 합니다.")
+        normalized_new_password = normalize_keyboard_secret(new_password)
+        if len(normalized_new_password) < 4:
+            raise ValueError("새 비밀번호는 4자 이상이어야 합니다.")
         salt = self.get_setting("recovery_salt")
         expected = self.get_setting("recovery_hash")
         iterations = int(self.get_setting("recovery_iterations") or PBKDF2_ITERATIONS)
@@ -199,7 +203,7 @@ class WeddingLedgerDB:
             return False
         password_salt = generate_salt()
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(new_password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_new_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("password_reset_at", now_iso())
         return True
@@ -207,11 +211,12 @@ class WeddingLedgerDB:
     def change_password(self, current_password: str, new_password: str) -> bool:
         if not self.verify_password(current_password):
             return False
-        if len(new_password) < 4:
-            raise ValueError("새 PIN은 4자리 이상이어야 합니다.")
+        normalized_new_password = normalize_keyboard_secret(new_password)
+        if len(normalized_new_password) < 4:
+            raise ValueError("새 비밀번호는 4자 이상이어야 합니다.")
         password_salt = generate_salt()
         self.set_setting("password_salt", password_salt)
-        self.set_setting("password_hash", hash_secret(new_password, password_salt))
+        self.set_setting("password_hash", hash_secret(normalized_new_password, password_salt))
         self.set_setting("password_iterations", str(PBKDF2_ITERATIONS))
         self.set_setting("password_changed_at", now_iso())
         return True

@@ -1,6 +1,6 @@
 import unittest
 
-from wedding_ledger.app import is_digits_or_empty, parse_amount, parse_required_int, validate_pin
+from wedding_ledger.app import is_digits_or_empty, parse_amount, parse_required_int, validate_password
 
 
 class AppHelperTest(unittest.TestCase):
@@ -22,12 +22,11 @@ class AppHelperTest(unittest.TestCase):
         self.assertFalse(is_digits_or_empty("100,000"))
         self.assertFalse(is_digits_or_empty("십만원"))
 
-    def test_validate_pin_requires_numeric_min_length(self) -> None:
-        validate_pin("1234")
-        with self.assertRaisesRegex(ValueError, "숫자"):
-            validate_pin("abcd")
-        with self.assertRaisesRegex(ValueError, "4자리"):
-            validate_pin("123")
+    def test_validate_password_requires_min_length(self) -> None:
+        validate_password("abcd")
+        validate_password("비번12")
+        with self.assertRaisesRegex(ValueError, "4자"):
+            validate_password("123")
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ INPUT_FONT = ("Apple SD Gothic Neo", 14)
 BODY_FONT = ("Apple SD Gothic Neo", 12)
 TITLE_FONT = ("Apple SD Gothic Neo", 28, "bold")
 SECTION_FONT = ("Apple SD Gothic Neo", 19, "bold")
-PIN_MIN_LENGTH = 4
+PASSWORD_MIN_LENGTH = 4
 
 
 def format_won(value: int | str | None) -> str:
@@ -57,11 +57,9 @@ def is_digits_or_empty(value: str) -> bool:
     return value == "" or value.isdigit()
 
 
-def validate_pin(value: str) -> None:
-    if not value.isdigit():
-        raise ValueError("PIN은 숫자만 사용할 수 있습니다.")
-    if len(value) < PIN_MIN_LENGTH:
-        raise ValueError(f"PIN은 {PIN_MIN_LENGTH}자리 이상이어야 합니다.")
+def validate_password(value: str) -> None:
+    if len(value) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"비밀번호는 {PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
 
 
 def payment_label_to_key(label: str) -> str:
@@ -324,24 +322,24 @@ class WeddingLedgerApp(tk.Tk):
         frame = ttk.Frame(self.container, padding=30, style="Card.TFrame")
         frame.place(relx=0.5, rely=0.5, anchor="center")
         ttk.Label(frame, text="축의대 장부 시작하기", style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 16))
-        ttk.Label(frame, text="숫자 PIN을 설정합니다. 복구키는 한 번만 보여줍니다.", style="Muted.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 20))
+        ttk.Label(frame, text="한/영 입력 상태와 상관없이 같은 키는 같은 비밀번호로 인식됩니다.", style="Muted.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 20))
 
         password_var = tk.StringVar()
         confirm_var = tk.StringVar()
-        ttk.Label(frame, text="PIN").grid(row=2, column=0, sticky="e", padx=8, pady=8)
-        password_entry = self._make_entry(frame, password_var, width=34, validate_digits=True, show="*")
+        ttk.Label(frame, text="비밀번호").grid(row=2, column=0, sticky="e", padx=8, pady=8)
+        password_entry = self._make_entry(frame, password_var, width=34, show="*")
         password_entry.grid(row=2, column=1, sticky="w")
-        ttk.Label(frame, text="PIN 확인").grid(row=3, column=0, sticky="e", padx=8, pady=8)
-        confirm_entry = self._make_entry(frame, confirm_var, width=34, validate_digits=True, show="*")
+        ttk.Label(frame, text="비밀번호 확인").grid(row=3, column=0, sticky="e", padx=8, pady=8)
+        confirm_entry = self._make_entry(frame, confirm_var, width=34, show="*")
         confirm_entry.grid(row=3, column=1, sticky="w")
 
         def submit() -> None:
             password = password_var.get()
             if password != confirm_var.get():
-                messagebox.showerror("확인 필요", "PIN 확인이 일치하지 않습니다.")
+                messagebox.showerror("확인 필요", "비밀번호 확인이 일치하지 않습니다.")
                 return
             try:
-                validate_pin(password)
+                validate_password(password)
             except ValueError as exc:
                 messagebox.showerror("확인 필요", str(exc))
                 return
@@ -355,7 +353,7 @@ class WeddingLedgerApp(tk.Tk):
             self._mark_activity()
             self.show_main()
 
-        ttk.Button(frame, text="PIN 설정", command=submit, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=(16, 0))
+        ttk.Button(frame, text="비밀번호 설정", command=submit, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=(16, 0))
         self._bind_safe_focus_chain([password_entry, confirm_entry], submit)
         password_entry.focus_set()
 
@@ -366,7 +364,7 @@ class WeddingLedgerApp(tk.Tk):
         top.configure(bg=BG)
         top.grab_set()
         ttk.Label(top, text="복구키", style="Title.TLabel").pack(anchor="w", padx=24, pady=(24, 6))
-        ttk.Label(top, text="PIN을 잊었을 때 필요합니다. 이 창을 닫기 전에 따로 적어두세요.", style="Muted.TLabel").pack(anchor="w", padx=24)
+        ttk.Label(top, text="비밀번호를 잊었을 때 필요합니다. 이 창을 닫기 전에 따로 적어두세요.", style="Muted.TLabel").pack(anchor="w", padx=24)
         text = tk.Text(top, height=3, font=("Menlo", 20, "bold"), bg=FIELD_BG, relief="flat")
         text.pack(fill="x", padx=24, pady=20)
         text.insert("1.0", recovery_key)
@@ -383,49 +381,49 @@ class WeddingLedgerApp(tk.Tk):
         if notice:
             ttk.Label(frame, text=notice, style="Muted.TLabel").grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
         password_var = tk.StringVar()
-        ttk.Label(frame, text="PIN").grid(row=2, column=0, sticky="e", padx=8, pady=8)
+        ttk.Label(frame, text="비밀번호").grid(row=2, column=0, sticky="e", padx=8, pady=8)
         entry = self._make_entry(frame, password_var, width=34, show="*")
         entry.grid(row=2, column=1, sticky="w")
 
         def unlock() -> None:
             if not self.db.verify_password(password_var.get()):
-                messagebox.showerror("로그인 실패", "PIN이 올바르지 않습니다.")
+                messagebox.showerror("로그인 실패", "비밀번호가 올바르지 않습니다.")
                 return
             self.unlocked = True
             self._mark_activity()
             self.show_main()
 
         ttk.Button(frame, text="로그인", command=unlock, style="Accent.TButton").grid(row=3, column=1, sticky="e", pady=(16, 0))
-        ttk.Button(frame, text="PIN을 잊으셨나요?", command=self.show_password_recovery).grid(row=4, column=1, sticky="e", pady=(8, 0))
+        ttk.Button(frame, text="비밀번호를 잊으셨나요?", command=self.show_password_recovery).grid(row=4, column=1, sticky="e", pady=(8, 0))
         entry.focus_set()
         entry.bind("<Return>", lambda _event: unlock())
 
     def show_password_recovery(self) -> None:
         top = tk.Toplevel(self)
-        top.title("PIN 복구")
+        top.title("비밀번호 복구")
         top.geometry("560x300")
         top.configure(bg=BG)
         top.grab_set()
         recovery_var = tk.StringVar()
         password_var = tk.StringVar()
         confirm_var = tk.StringVar()
-        ttk.Label(top, text="복구키로 새 PIN 설정", style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", padx=24, pady=(24, 14))
+        ttk.Label(top, text="복구키로 새 비밀번호 설정", style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", padx=24, pady=(24, 14))
         ttk.Label(top, text="복구키").grid(row=1, column=0, sticky="e", padx=8, pady=8)
         recovery_entry = ttk.Entry(top, textvariable=recovery_var, width=44)
         recovery_entry.grid(row=1, column=1, sticky="w")
-        ttk.Label(top, text="새 PIN").grid(row=2, column=0, sticky="e", padx=8, pady=8)
-        password_entry = self._make_entry(top, password_var, width=34, validate_digits=True, show="*")
+        ttk.Label(top, text="새 비밀번호").grid(row=2, column=0, sticky="e", padx=8, pady=8)
+        password_entry = self._make_entry(top, password_var, width=34, show="*")
         password_entry.grid(row=2, column=1, sticky="w")
-        ttk.Label(top, text="새 PIN 확인").grid(row=3, column=0, sticky="e", padx=8, pady=8)
-        confirm_entry = self._make_entry(top, confirm_var, width=34, validate_digits=True, show="*")
+        ttk.Label(top, text="새 비밀번호 확인").grid(row=3, column=0, sticky="e", padx=8, pady=8)
+        confirm_entry = self._make_entry(top, confirm_var, width=34, show="*")
         confirm_entry.grid(row=3, column=1, sticky="w")
 
         def reset() -> None:
             if password_var.get() != confirm_var.get():
-                messagebox.showerror("확인 필요", "새 PIN 확인이 일치하지 않습니다.")
+                messagebox.showerror("확인 필요", "새 비밀번호 확인이 일치하지 않습니다.")
                 return
             try:
-                validate_pin(password_var.get())
+                validate_password(password_var.get())
             except ValueError as exc:
                 messagebox.showerror("확인 필요", str(exc))
                 return
@@ -437,10 +435,10 @@ class WeddingLedgerApp(tk.Tk):
             if not ok:
                 messagebox.showerror("복구 실패", "복구키가 올바르지 않습니다.")
                 return
-            messagebox.showinfo("완료", "PIN이 변경되었습니다.")
+            messagebox.showinfo("완료", "비밀번호가 변경되었습니다.")
             top.destroy()
 
-        ttk.Button(top, text="PIN 재설정", command=reset, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=16)
+        ttk.Button(top, text="비밀번호 재설정", command=reset, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=16)
         self._bind_safe_focus_chain([recovery_entry, password_entry, confirm_entry], reset)
         recovery_entry.focus_set()
 
@@ -1018,7 +1016,7 @@ class WeddingLedgerApp(tk.Tk):
         ttk.Button(buttons, text="엑셀 추출", command=self.export_excel).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
         ttk.Button(buttons, text="수동 백업 생성", command=self.manual_backup).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
         ttk.Button(buttons, text="백업 복원", command=self.restore_backup).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Button(buttons, text="PIN 변경", command=self.change_password_dialog).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        ttk.Button(buttons, text="비밀번호 변경", command=self.change_password_dialog).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
 
     def refresh_settings(self) -> None:
         if hasattr(self, "settings_text_var"):
@@ -1077,19 +1075,19 @@ class WeddingLedgerApp(tk.Tk):
 
     def change_password_dialog(self) -> None:
         top = tk.Toplevel(self)
-        top.title("PIN 변경")
+        top.title("비밀번호 변경")
         top.geometry("440x260")
         top.configure(bg=BG)
         top.grab_set()
         current_var = tk.StringVar()
         new_var = tk.StringVar()
         confirm_var = tk.StringVar()
-        ttk.Label(top, text="PIN 변경", style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", padx=24, pady=(24, 12))
+        ttk.Label(top, text="비밀번호 변경", style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", padx=24, pady=(24, 12))
         password_widgets: list[tk.Entry] = []
         fields = [
-            ("현재 PIN", current_var, False),
-            ("새 PIN", new_var, True),
-            ("새 PIN 확인", confirm_var, True),
+            ("현재 비밀번호", current_var, False),
+            ("새 비밀번호", new_var, False),
+            ("새 비밀번호 확인", confirm_var, False),
         ]
         for idx, (label, var, digits_only) in enumerate(fields, start=1):
             ttk.Label(top, text=label).grid(row=idx, column=0, sticky="e", padx=8, pady=8)
@@ -1099,10 +1097,10 @@ class WeddingLedgerApp(tk.Tk):
 
         def submit() -> None:
             if new_var.get() != confirm_var.get():
-                messagebox.showerror("확인 필요", "새 PIN 확인이 일치하지 않습니다.")
+                messagebox.showerror("확인 필요", "새 비밀번호 확인이 일치하지 않습니다.")
                 return
             try:
-                validate_pin(new_var.get())
+                validate_password(new_var.get())
             except ValueError as exc:
                 messagebox.showerror("확인 필요", str(exc))
                 return
@@ -1112,9 +1110,9 @@ class WeddingLedgerApp(tk.Tk):
                 messagebox.showerror("확인 필요", str(exc))
                 return
             if not ok:
-                messagebox.showerror("실패", "현재 PIN이 올바르지 않습니다.")
+                messagebox.showerror("실패", "현재 비밀번호가 올바르지 않습니다.")
                 return
-            messagebox.showinfo("완료", "PIN이 변경되었습니다.")
+            messagebox.showinfo("완료", "비밀번호가 변경되었습니다.")
             top.destroy()
 
         ttk.Button(top, text="변경", command=submit, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=12)
