@@ -19,9 +19,9 @@ struct WeddingLedgerSwiftApp: App {
             RootView()
                 .environmentObject(state)
                 .preferredColorScheme(state.themePreference.colorScheme)
-                .frame(minWidth: 860, minHeight: 660)
+                .frame(minWidth: 860, minHeight: 560)
         }
-        .defaultSize(width: 1180, height: 720)
+        .defaultSize(width: 1180, height: 680)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }

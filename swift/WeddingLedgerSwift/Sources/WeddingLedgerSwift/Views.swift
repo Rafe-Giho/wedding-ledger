@@ -200,18 +200,22 @@ struct WorkspaceContent: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let contentHeight = max(0, proxy.size.height - layout.contentPadding)
+            let contentHeight = max(320, proxy.size.height - layout.contentPadding)
             if section == .settings || layout == .compact {
                 ScrollView {
                     content(availableHeight: contentHeight)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(.bottom, layout.contentPadding)
                 }
+                .scrollIndicators(.visible)
             } else {
-                content(availableHeight: contentHeight)
-                    .frame(height: contentHeight)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.bottom, layout.contentPadding)
+                ScrollView {
+                    content(availableHeight: contentHeight)
+                        .frame(minHeight: contentHeight, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.bottom, layout.contentPadding)
+                }
+                .scrollIndicators(.visible)
             }
         }
     }
@@ -299,37 +303,47 @@ struct SidebarView: View {
     let width: CGFloat
 
     var body: some View {
-        VStack(spacing: 0) {
-            BrandLockup(horizontal: false)
-                .padding(.top, 58)
-                .padding(.bottom, 42)
-            VStack(spacing: 14) {
-                ForEach(SectionKey.allCases) { item in
-                    NavigationButton(item: item, isActive: section == item) {
-                        section = item
+        GeometryReader { proxy in
+            let short = proxy.size.height < 760
+            let topPadding: CGFloat = short ? 28 : 48
+            let brandBottom: CGFloat = short ? 24 : 34
+            let navSpacing: CGFloat = short ? 8 : 12
+            let floralHeight = short
+                ? min(88, max(44, proxy.size.height * 0.10))
+                : min(220, max(120, proxy.size.height * 0.22))
+            VStack(spacing: 0) {
+                BrandLockup(horizontal: false)
+                    .padding(.top, topPadding)
+                    .padding(.bottom, brandBottom)
+                VStack(spacing: navSpacing) {
+                    ForEach(SectionKey.allCases) { item in
+                        NavigationButton(item: item, isActive: section == item) {
+                            section = item
+                        }
                     }
                 }
+                .padding(.horizontal, width == 220 ? 18 : 28)
+                Spacer(minLength: 10)
+                FloralLineArt()
+                    .stroke(AppColors.gold.opacity(0.34), lineWidth: 1.2)
+                    .frame(width: width == 220 ? 150 : 188, height: floralHeight)
+                    .padding(.bottom, short ? 10 : 14)
+                GuideButtonRow { page in
+                    guidePage = page
+                }
+                .padding(.bottom, short ? 8 : 12)
+                Button("잠금") {
+                    state.isUnlocked = false
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppColors.text)
+                .padding(.horizontal, 20)
+                .frame(width: 148, height: 44)
+                .background(AppColors.field, in: Capsule())
+                .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
+                .padding(.bottom, short ? 12 : 18)
             }
-            .padding(.horizontal, width == 220 ? 18 : 28)
-            Spacer()
-            FloralLineArt()
-                .stroke(AppColors.gold.opacity(0.34), lineWidth: 1.2)
-                .frame(width: width == 220 ? 170 : 220, height: 300)
-                .padding(.bottom, 18)
-            GuideButtonRow { page in
-                guidePage = page
-            }
-            .padding(.bottom, 14)
-            Button("잠금") {
-                state.isUnlocked = false
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppColors.text)
-            .padding(.horizontal, 20)
-            .frame(width: 148, height: 44)
-            .background(AppColors.field, in: Capsule())
-            .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
-            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: width)
         .background(AppColors.sidebar)
@@ -474,7 +488,7 @@ struct EntryDashboardView: View {
             HStack(alignment: .top, spacing: 18) {
                 EntryFormView(compact: false, fillsHeight: true)
                     .frame(minWidth: layout.entryFormWidth, maxWidth: 640)
-                    .frame(maxHeight: .infinity)
+                    .frame(height: availableHeight)
                 VStack(spacing: 18) {
                     RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -482,9 +496,10 @@ struct EntryDashboardView: View {
                         .frame(maxWidth: .infinity)
                     ThanksCard()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(height: availableHeight, alignment: .topLeading)
             }
-            .frame(height: availableHeight)
+            .frame(minHeight: availableHeight, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
