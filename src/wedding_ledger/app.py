@@ -1154,10 +1154,12 @@ class WeddingLedgerApp(tk.Tk):
         self._button(buttons, "테스트 모드로 전환", lambda: self.switch_mode(MODE_TEST), width=164).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         self._button(buttons, "운영 모드로 전환", lambda: self.switch_mode(MODE_LIVE), variant="primary", width=164).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self._button(buttons, "테스트 데이터 초기화", self.clear_test_data, variant="danger", width=164).grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        self._button(buttons, "엑셀 추출", self.export_excel, width=164).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        self._button(buttons, "수동 백업 생성", self.manual_backup, width=164).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        self._button(buttons, "백업 복원", self.restore_backup, width=164).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        self._button(buttons, "비밀번호 변경", self.change_password_dialog, width=164).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "기록/목록 초기화", self.clear_records_and_lookups, variant="danger", width=164).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "전체 초기화", self.reset_all_data, variant="danger", width=164).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "엑셀 추출", self.export_excel, width=164).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "수동 백업 생성", self.manual_backup, width=164).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "백업 복원", self.restore_backup, width=164).grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+        self._button(buttons, "비밀번호 변경", self.change_password_dialog, width=164).grid(row=4, column=0, padx=5, pady=5, sticky="ew")
 
     def refresh_settings(self) -> None:
         if hasattr(self, "settings_text_var"):
@@ -1170,14 +1172,28 @@ class WeddingLedgerApp(tk.Tk):
         self.refresh_all()
 
     def clear_test_data(self) -> None:
-        if self.db.get_mode() == MODE_LIVE:
-            messagebox.showerror("차단됨", "운영 모드에서는 테스트 데이터 초기화를 실행할 수 없습니다.")
+        if not messagebox.askyesno("테스트 데이터 초기화", "테스트 모드 기록만 삭제합니다. 백업은 생성하지 않습니다. 계속할까요?"):
             return
-        if not messagebox.askyesno("테스트 데이터 초기화", "테스트 모드 기록을 모두 삭제합니다. 계속할까요?"):
-            return
-        backup = self.db.clear_test_data()
-        messagebox.showinfo("완료", f"초기화 전 백업을 생성했습니다.\n{backup}")
+        deleted_count = self.db.clear_test_data()
+        messagebox.showinfo("완료", f"테스트 기록 {deleted_count:,}건을 삭제했습니다.")
         self.refresh_all()
+
+    def clear_records_and_lookups(self) -> None:
+        if not messagebox.askyesno("기록/목록 초기화", "모든 기록과 모임/관계 목록을 삭제합니다. 비밀번호와 설정은 유지됩니다. 계속할까요?"):
+            return
+        self.db.clear_records_and_lookups()
+        messagebox.showinfo("완료", "기록과 모임/관계 목록을 삭제했습니다.")
+        self.refresh_all()
+
+    def reset_all_data(self) -> None:
+        if not messagebox.askyesno("전체 초기화", "기록, 모임/관계, 비밀번호, 복구키, 설정을 모두 삭제합니다. 처음 시작 화면으로 돌아갑니다. 계속할까요?"):
+            return
+        if not messagebox.askyesno("전체 초기화 재확인", "이 작업은 앱 안에서 되돌릴 수 없습니다. 정말 전체 초기화할까요?"):
+            return
+        self.db.reset_all_data()
+        messagebox.showinfo("완료", "전체 초기화가 완료되었습니다. 새 비밀번호를 설정해 주세요.")
+        self.unlocked = False
+        self.show_setup()
 
     def export_excel(self) -> None:
         default_name = "wedding_ledger_export.xls"

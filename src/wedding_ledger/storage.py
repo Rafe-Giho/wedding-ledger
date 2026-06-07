@@ -658,12 +658,28 @@ class WeddingLedgerDB:
         self._secure_db_file()
         return before_restore
 
-    def clear_test_data(self) -> Path:
-        backup = self.create_backup("before_clear_test")
+    def clear_test_data(self) -> int:
         test_ids = [row["id"] for row in self.conn.execute("SELECT id FROM entries WHERE mode = ?", (MODE_TEST,))]
         if test_ids:
             placeholders = ",".join("?" for _ in test_ids)
             self.conn.execute(f"DELETE FROM audit_logs WHERE entry_id IN ({placeholders})", test_ids)
         self.conn.execute("DELETE FROM entries WHERE mode = ?", (MODE_TEST,))
+        self.conn.execute("DELETE FROM lookup_items")
+        self._seed_lookup_items_from_entries()
         self.conn.commit()
-        return backup
+        return len(test_ids)
+
+    def clear_records_and_lookups(self) -> None:
+        self.conn.execute("DELETE FROM audit_logs")
+        self.conn.execute("DELETE FROM entries")
+        self.conn.execute("DELETE FROM lookup_items")
+        self._seed_lookup_items_from_entries()
+        self.conn.commit()
+
+    def reset_all_data(self) -> None:
+        self.conn.execute("DELETE FROM audit_logs")
+        self.conn.execute("DELETE FROM entries")
+        self.conn.execute("DELETE FROM lookup_items")
+        self.conn.execute("DELETE FROM settings")
+        self.conn.commit()
+        self._initialize()
