@@ -23,6 +23,23 @@ from .excel_export import export_xls
 from .storage import WeddingLedgerDB
 
 
+BG = "#F1E9DA"
+SURFACE = "#FFFDF7"
+SURFACE_ALT = "#F8F0E3"
+TEXT = "#17231F"
+MUTED = "#647067"
+ACCENT = "#1F6F55"
+ACCENT_DARK = "#123F33"
+ACCENT_LIGHT = "#E0EFE6"
+DANGER = "#A23A2E"
+BORDER = "#D8CCB8"
+FIELD_BG = "#FFFFFF"
+INPUT_FONT = ("Apple SD Gothic Neo", 14)
+BODY_FONT = ("Apple SD Gothic Neo", 12)
+TITLE_FONT = ("Apple SD Gothic Neo", 30, "bold")
+SECTION_FONT = ("Apple SD Gothic Neo", 20, "bold")
+
+
 def format_won(value: int | str | None) -> str:
     try:
         return f"{int(value or 0):,}원"
@@ -33,6 +50,10 @@ def format_won(value: int | str | None) -> str:
 def parse_amount(value: str) -> int:
     digits = re.sub(r"[^0-9]", "", value or "")
     return int(digits or 0)
+
+
+def is_digits_or_empty(value: str) -> bool:
+    return value == "" or value.isdigit()
 
 
 def payment_label_to_key(label: str) -> str:
@@ -52,6 +73,109 @@ def parse_required_int(value: str, label: str, minimum: int = 0) -> int:
     return number
 
 
+class SuggestionEntry(ttk.Frame):
+    def __init__(self, parent: tk.Widget, textvariable: tk.StringVar, width: int = 30) -> None:
+        super().__init__(parent)
+        self.variable = textvariable
+        self.values: list[str] = []
+        self.popup: tk.Toplevel | None = None
+        self.entry = tk.Entry(
+            self,
+            textvariable=textvariable,
+            width=width,
+            font=INPUT_FONT,
+            bg=FIELD_BG,
+            fg=TEXT,
+            insertbackground=ACCENT_DARK,
+            insertwidth=2,
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+        )
+        self.entry.pack(side="left", fill="x", expand=True)
+        self.button = tk.Button(
+            self,
+            text="목록",
+            command=self.show_popup,
+            font=("Apple SD Gothic Neo", 11, "bold"),
+            bg=ACCENT_LIGHT,
+            fg=ACCENT_DARK,
+            activebackground="#CFE4D7",
+            activeforeground=ACCENT_DARK,
+            relief="solid",
+            bd=1,
+            padx=8,
+        )
+        self.button.pack(side="left", padx=(6, 0))
+        self.entry.bind("<Down>", lambda _event: self._show_popup_from_key())
+        self.entry.bind("<Escape>", lambda _event: self.hide_popup())
+
+    def configure_values(self, values: list[str]) -> None:
+        seen: set[str] = set()
+        self.values = []
+        for value in values:
+            clean = str(value).strip()
+            if clean and clean not in seen:
+                seen.add(clean)
+                self.values.append(clean)
+
+    def _show_popup_from_key(self) -> str:
+        self.show_popup()
+        return "break"
+
+    def show_popup(self) -> None:
+        self.hide_popup()
+        if not self.values:
+            return
+        self.popup = tk.Toplevel(self)
+        self.popup.overrideredirect(True)
+        self.popup.configure(bg=BORDER)
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height() + 2
+        width = max(self.winfo_width(), 220)
+        height = min(max(len(self.values), 1), 8) * 30 + 4
+        self.popup.geometry(f"{width}x{height}+{x}+{y}")
+        listbox = tk.Listbox(
+            self.popup,
+            font=INPUT_FONT,
+            bg=FIELD_BG,
+            fg=TEXT,
+            activebackground=ACCENT_LIGHT,
+            activeforeground=TEXT,
+            selectbackground=ACCENT,
+            selectforeground="#FFFFFF",
+            relief="flat",
+            highlightthickness=0,
+            exportselection=False,
+        )
+        listbox.pack(fill="both", expand=True, padx=1, pady=1)
+        for value in self.values:
+            listbox.insert("end", value)
+
+        def choose(_event: tk.Event | None = None) -> str:
+            selection = listbox.curselection()
+            if selection:
+                self.variable.set(listbox.get(selection[0]))
+            self.hide_popup()
+            self.entry.focus_set()
+            self.entry.icursor("end")
+            return "break"
+
+        listbox.bind("<ButtonRelease-1>", choose)
+        listbox.bind("<Return>", choose)
+        listbox.bind("<Escape>", lambda _event: self.hide_popup())
+        listbox.focus_set()
+        listbox.selection_set(0)
+
+    def hide_popup(self) -> str:
+        if self.popup and self.popup.winfo_exists():
+            self.popup.destroy()
+        self.popup = None
+        return "break"
+
+
 class WeddingLedgerApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -62,8 +186,9 @@ class WeddingLedgerApp(tk.Tk):
         self.title(APP_TITLE)
         self.geometry("1180x760")
         self.minsize(1020, 680)
-        self.configure(bg="#F4EFE5")
+        self.configure(bg=BG)
         self._configure_style()
+        self.numeric_vcmd = (self.register(is_digits_or_empty), "%P")
         self.container = ttk.Frame(self, padding=18)
         self.container.pack(fill="both", expand=True)
         self.bind_all("<Key>", self._mark_activity)
@@ -77,17 +202,27 @@ class WeddingLedgerApp(tk.Tk):
     def _configure_style(self) -> None:
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure(".", font=("Apple SD Gothic Neo", 12), background="#F4EFE5")
-        style.configure("TFrame", background="#F4EFE5")
-        style.configure("TLabel", background="#F4EFE5", foreground="#24352F")
-        style.configure("Title.TLabel", font=("Apple SD Gothic Neo", 28, "bold"))
-        style.configure("Muted.TLabel", foreground="#6E776F")
-        style.configure("Danger.TLabel", foreground="#9B3328")
-        style.configure("Card.TFrame", background="#FFF9EF", relief="flat")
-        style.configure("Accent.TButton", font=("Apple SD Gothic Neo", 13, "bold"))
-        style.configure("Danger.TButton", foreground="#9B3328")
-        style.configure("Treeview", font=("Apple SD Gothic Neo", 11), rowheight=30)
-        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 11, "bold"))
+        style.configure(".", font=BODY_FONT, background=BG)
+        style.configure("TFrame", background=BG)
+        style.configure("TLabel", background=BG, foreground=TEXT)
+        style.configure("Title.TLabel", font=TITLE_FONT, foreground=TEXT)
+        style.configure("Section.TLabel", font=SECTION_FONT, foreground=TEXT)
+        style.configure("Muted.TLabel", foreground=MUTED)
+        style.configure("Danger.TLabel", foreground=DANGER)
+        style.configure("Hero.TFrame", background=ACCENT_DARK)
+        style.configure("HeroTitle.TLabel", background=ACCENT_DARK, foreground="#FFFDF7", font=TITLE_FONT)
+        style.configure("HeroMuted.TLabel", background=ACCENT_DARK, foreground="#DDEBE4", font=BODY_FONT)
+        style.configure("Pill.TLabel", background=ACCENT_LIGHT, foreground=ACCENT_DARK, font=("Apple SD Gothic Neo", 12, "bold"))
+        style.configure("Card.TFrame", background=SURFACE, relief="flat")
+        style.configure("Accent.TButton", font=("Apple SD Gothic Neo", 13, "bold"), foreground="#FFFFFF", background=ACCENT)
+        style.map("Accent.TButton", background=[("active", ACCENT_DARK), ("pressed", ACCENT_DARK)])
+        style.configure("TButton", font=BODY_FONT, padding=(12, 8), background=SURFACE_ALT)
+        style.configure("Danger.TButton", foreground=DANGER)
+        style.configure("TNotebook", background=BG, borderwidth=0)
+        style.configure("TNotebook.Tab", font=("Apple SD Gothic Neo", 12, "bold"), padding=(16, 9), background=SURFACE_ALT, foreground=MUTED)
+        style.map("TNotebook.Tab", background=[("selected", SURFACE)], foreground=[("selected", TEXT)])
+        style.configure("Treeview", font=("Apple SD Gothic Neo", 12), rowheight=34, background=FIELD_BG, fieldbackground=FIELD_BG, foreground=TEXT)
+        style.configure("Treeview.Heading", font=("Apple SD Gothic Neo", 12, "bold"), background=ACCENT_DARK, foreground="#FFFFFF")
 
     def _bind_safe_focus_chain(
         self,
@@ -130,6 +265,35 @@ class WeddingLedgerApp(tk.Tk):
             pass
         except AttributeError:
             pass
+
+    def _make_entry(
+        self,
+        parent: tk.Widget,
+        variable: tk.StringVar,
+        width: int = 30,
+        validate_digits: bool = False,
+        show: str | None = None,
+    ) -> tk.Entry:
+        entry = tk.Entry(
+            parent,
+            textvariable=variable,
+            width=width,
+            font=INPUT_FONT,
+            bg=FIELD_BG,
+            fg=TEXT,
+            insertbackground=ACCENT_DARK,
+            insertwidth=2,
+            relief="solid",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+        )
+        if show:
+            entry.configure(show=show)
+        if validate_digits:
+            entry.configure(validate="key", validatecommand=self.numeric_vcmd)
+        return entry
 
     def _clear(self) -> None:
         for child in self.container.winfo_children():
@@ -186,7 +350,7 @@ class WeddingLedgerApp(tk.Tk):
         top = tk.Toplevel(self)
         top.title("복구키 보관")
         top.geometry("560x320")
-        top.configure(bg="#F4EFE5")
+        top.configure(bg=BG)
         top.grab_set()
         ttk.Label(top, text="복구키", style="Title.TLabel").pack(anchor="w", padx=24, pady=(24, 6))
         ttk.Label(top, text="비밀번호를 잊었을 때 필요합니다. 이 창을 닫기 전에 따로 적어두세요.", style="Muted.TLabel").pack(anchor="w", padx=24)
@@ -227,7 +391,7 @@ class WeddingLedgerApp(tk.Tk):
         top = tk.Toplevel(self)
         top.title("비밀번호 복구")
         top.geometry("560x300")
-        top.configure(bg="#F4EFE5")
+        top.configure(bg=BG)
         top.grab_set()
         recovery_var = tk.StringVar()
         password_var = tk.StringVar()
@@ -280,11 +444,17 @@ class WeddingLedgerApp(tk.Tk):
     def show_main(self) -> None:
         self._clear()
         self._mark_activity()
-        header = ttk.Frame(self.container)
-        header.pack(fill="x", pady=(0, 12))
-        self.mode_label = ttk.Label(header, text="", style="Title.TLabel")
-        self.mode_label.pack(side="left")
-        ttk.Button(header, text="지금 잠금", command=lambda: self.lock_app("수동으로 잠금되었습니다.")).pack(side="right")
+        header = ttk.Frame(self.container, padding=20, style="Hero.TFrame")
+        header.pack(fill="x", pady=(0, 16))
+        title_box = ttk.Frame(header, style="Hero.TFrame")
+        title_box.pack(side="left", fill="x", expand=True)
+        ttk.Label(title_box, text=APP_TITLE, style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(title_box, text="신부측 축의금과 식권을 빠르게 기록하고 정산합니다.", style="HeroMuted.TLabel").pack(anchor="w", pady=(4, 0))
+        header_actions = ttk.Frame(header, style="Hero.TFrame")
+        header_actions.pack(side="right")
+        self.mode_label = ttk.Label(header_actions, text="", style="Pill.TLabel", padding=(12, 7))
+        self.mode_label.pack(side="left", padx=(0, 10))
+        ttk.Button(header_actions, text="지금 잠금", command=lambda: self.lock_app("수동으로 잠금되었습니다.")).pack(side="left")
 
         self.notebook = ttk.Notebook(self.container)
         self.notebook.pack(fill="both", expand=True)
@@ -307,7 +477,7 @@ class WeddingLedgerApp(tk.Tk):
         if not self.unlocked:
             return
         mode = self.db.get_mode()
-        self.mode_label.configure(text=f"{APP_TITLE} · {MODE_LABELS[mode]} 모드")
+        self.mode_label.configure(text=f"{MODE_LABELS[mode]} 모드")
         self.refresh_entry_defaults()
         self.refresh_last_entries()
         self.refresh_search()
@@ -315,7 +485,7 @@ class WeddingLedgerApp(tk.Tk):
         self.refresh_settings()
 
     def build_entry_tab(self) -> None:
-        form = ttk.Frame(self.entry_tab)
+        form = ttk.Frame(self.entry_tab, padding=18, style="Card.TFrame")
         form.pack(side="left", fill="y", padx=(0, 16))
         self.envelope_var = tk.StringVar()
         self.name_var = tk.StringVar()
@@ -326,19 +496,17 @@ class WeddingLedgerApp(tk.Tk):
         self.payment_var = tk.StringVar(value=PAYMENT_METHODS["cash"])
         self.memo_var = tk.StringVar()
 
-        ttk.Label(form, text="빠른 입력", style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
-        self.envelope_entry = self._labeled_entry(form, "봉투번호", self.envelope_var, 1)
+        ttk.Label(form, text="빠른 입력", style="Section.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
+        self.envelope_entry = self._labeled_entry(form, "봉투번호", self.envelope_var, 1, validate_digits=True)
         self.name_entry = self._labeled_entry(form, "이름 *", self.name_var, 2)
         ttk.Label(form, text="모임").grid(row=3, column=0, sticky="e", padx=8, pady=7)
-        self.group_combo = ttk.Combobox(form, textvariable=self.group_var, width=28)
-        self.group_combo.grid(row=3, column=1, columnspan=2, sticky="w")
+        self.group_select = SuggestionEntry(form, self.group_var, width=24)
+        self.group_select.grid(row=3, column=1, columnspan=2, sticky="ew")
         ttk.Label(form, text="관계").grid(row=4, column=0, sticky="e", padx=8, pady=7)
-        self.relationship_combo = ttk.Combobox(form, textvariable=self.relationship_var, width=28)
-        self.relationship_combo.grid(row=4, column=1, columnspan=2, sticky="w")
+        self.relationship_select = SuggestionEntry(form, self.relationship_var, width=24)
+        self.relationship_select.grid(row=4, column=1, columnspan=2, sticky="ew")
 
-        ttk.Label(form, text="금액 *").grid(row=5, column=0, sticky="e", padx=8, pady=7)
-        self.amount_entry = ttk.Entry(form, textvariable=self.amount_var, width=30)
-        self.amount_entry.grid(row=5, column=1, columnspan=2, sticky="w")
+        self.amount_entry = self._labeled_entry(form, "금액 *", self.amount_var, 5, validate_digits=True)
         amount_frame = ttk.Frame(form)
         amount_frame.grid(row=6, column=1, columnspan=2, sticky="w", pady=(0, 8))
         for index, amount in enumerate(DEFAULT_QUICK_AMOUNTS):
@@ -346,6 +514,7 @@ class WeddingLedgerApp(tk.Tk):
 
         ttk.Label(form, text="식권 수 *").grid(row=7, column=0, sticky="e", padx=8, pady=7)
         self.ticket_spinbox = ttk.Spinbox(form, textvariable=self.ticket_var, from_=0, to=20, width=8)
+        self.ticket_spinbox.configure(validate="key", validatecommand=self.numeric_vcmd)
         self.ticket_spinbox.grid(row=7, column=1, sticky="w")
         ttk.Label(form, text="입금방식 *").grid(row=8, column=0, sticky="e", padx=8, pady=7)
         self.payment_combo = ttk.Combobox(form, textvariable=self.payment_var, values=list(PAYMENT_METHODS.values()), state="readonly", width=12)
@@ -357,8 +526,8 @@ class WeddingLedgerApp(tk.Tk):
             [
                 self.envelope_entry,
                 self.name_entry,
-                self.group_combo,
-                self.relationship_combo,
+                self.group_select.entry,
+                self.relationship_select.entry,
                 self.amount_entry,
                 self.ticket_spinbox,
                 self.payment_combo,
@@ -367,9 +536,9 @@ class WeddingLedgerApp(tk.Tk):
             self.save_entry,
         )
 
-        recent_frame = ttk.Frame(self.entry_tab)
+        recent_frame = ttk.Frame(self.entry_tab, padding=18, style="Card.TFrame")
         recent_frame.pack(side="left", fill="both", expand=True)
-        ttk.Label(recent_frame, text="최근 입력", style="Title.TLabel").pack(anchor="w", pady=(0, 12))
+        ttk.Label(recent_frame, text="최근 입력", style="Section.TLabel").pack(anchor="w", pady=(0, 12))
         self.last_tree = self._create_tree(
             recent_frame,
             ("envelope", "name", "group", "amount", "tickets", "payment", "status"),
@@ -378,16 +547,23 @@ class WeddingLedgerApp(tk.Tk):
         self.last_tree.pack(fill="both", expand=True)
         self.last_tree.bind("<Double-1>", lambda _event: self.edit_selected_from_tree(self.last_tree))
 
-    def _labeled_entry(self, parent: ttk.Frame, label: str, variable: tk.StringVar, row_index: int) -> ttk.Entry:
+    def _labeled_entry(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        variable: tk.StringVar,
+        row_index: int,
+        validate_digits: bool = False,
+    ) -> tk.Entry:
         ttk.Label(parent, text=label).grid(row=row_index, column=0, sticky="e", padx=8, pady=7)
-        entry = ttk.Entry(parent, textvariable=variable, width=30)
+        entry = self._make_entry(parent, variable, width=30, validate_digits=validate_digits)
         entry.grid(row=row_index, column=1, columnspan=2, sticky="w")
         return entry
 
     def refresh_entry_defaults(self) -> None:
         self.envelope_var.set(str(self.db.next_envelope_no()))
-        self.group_combo.configure(values=self.db.recent_groups())
-        self.relationship_combo.configure(values=self.db.recent_relationships())
+        self.group_select.configure_values(self.db.recent_groups())
+        self.relationship_select.configure_values(self.db.recent_relationships())
 
     def clear_entry_form(self) -> None:
         self.name_var.set("")
@@ -437,7 +613,7 @@ class WeddingLedgerApp(tk.Tk):
         self.refresh_all()
 
     def build_search_tab(self) -> None:
-        filters = ttk.Frame(self.search_tab)
+        filters = ttk.Frame(self.search_tab, padding=14, style="Card.TFrame")
         filters.pack(fill="x", pady=(0, 10))
         self.search_name_var = tk.StringVar()
         self.search_group_var = tk.StringVar()
@@ -458,7 +634,12 @@ class WeddingLedgerApp(tk.Tk):
         search_entries: list[tk.Widget] = []
         for label, variable, column in items:
             ttk.Label(filters, text=label).grid(row=0, column=column, padx=(0, 4))
-            entry = ttk.Entry(filters, textvariable=variable, width=12)
+            entry = self._make_entry(
+                filters,
+                variable,
+                width=12,
+                validate_digits=label in {"최소금액", "최대금액", "식권수"},
+            )
             entry.grid(row=0, column=column + 1, padx=(0, 8))
             search_entries.append(entry)
         search_payment_combo = ttk.Combobox(filters, textvariable=self.search_payment_var, values=["전체", *PAYMENT_METHODS.values()], state="readonly", width=8)
@@ -490,7 +671,7 @@ class WeddingLedgerApp(tk.Tk):
         self.search_tree.pack(fill="both", expand=True)
         self.search_tree.bind("<Double-1>", lambda _event: self.edit_selected_from_tree(self.search_tree))
 
-        actions = ttk.Frame(self.search_tab)
+        actions = ttk.Frame(self.search_tab, padding=(0, 8, 0, 0))
         actions.pack(fill="x", pady=(10, 0))
         ttk.Button(actions, text="선택 수정", command=lambda: self.edit_selected_from_tree(self.search_tree)).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="선택 취소 처리", command=self.void_selected).pack(side="left", padx=6)
@@ -603,8 +784,8 @@ class WeddingLedgerApp(tk.Tk):
     def show_edit_dialog(self, entry: dict[str, object]) -> None:
         top = tk.Toplevel(self)
         top.title("기록 수정")
-        top.geometry("520x520")
-        top.configure(bg="#F4EFE5")
+        top.geometry("560x560")
+        top.configure(bg=BG)
         top.grab_set()
         vars_map = {
             "envelope_no": tk.StringVar(value=str(entry["envelope_no"])),
@@ -635,10 +816,26 @@ class WeddingLedgerApp(tk.Tk):
             if key == "payment_method":
                 widget = ttk.Combobox(top, textvariable=vars_map[key], values=list(PAYMENT_METHODS.values()), state="readonly", width=12)
                 widget.grid(row=idx, column=1, sticky="w")
+                edit_widgets.append(widget)
+            elif key == "group_name":
+                select = SuggestionEntry(top, vars_map[key], width=28)
+                select.configure_values(self.db.recent_groups())
+                select.grid(row=idx, column=1, sticky="ew")
+                edit_widgets.append(select.entry)
+            elif key == "relationship":
+                select = SuggestionEntry(top, vars_map[key], width=28)
+                select.configure_values(self.db.recent_relationships())
+                select.grid(row=idx, column=1, sticky="ew")
+                edit_widgets.append(select.entry)
             else:
-                widget = ttk.Entry(top, textvariable=vars_map[key], width=34)
+                widget = self._make_entry(
+                    top,
+                    vars_map[key],
+                    width=34,
+                    validate_digits=key in {"envelope_no", "amount", "meal_ticket_count"},
+                )
                 widget.grid(row=idx, column=1, sticky="w")
-            edit_widgets.append(widget)
+                edit_widgets.append(widget)
 
         def save() -> None:
             if self.db.name_exists(str(entry["mode"]), vars_map["name"].get(), exclude_id=str(entry["id"])):
@@ -734,16 +931,16 @@ class WeddingLedgerApp(tk.Tk):
             ttk.Label(frame, text=title, style="Muted.TLabel").pack(anchor="w")
             ttk.Label(frame, textvariable=self.summary_vars[key], font=("Apple SD Gothic Neo", 18, "bold")).pack(anchor="w")
 
-        compare = ttk.Frame(self.summary_tab)
+        compare = ttk.Frame(self.summary_tab, padding=14, style="Card.TFrame")
         compare.pack(fill="x", pady=(0, 12))
         self.actual_envelope_var = tk.StringVar()
         self.actual_cash_var = tk.StringVar()
         self.compare_result_var = tk.StringVar()
         ttk.Label(compare, text="실제 봉투 수").pack(side="left")
-        actual_envelope_entry = ttk.Entry(compare, textvariable=self.actual_envelope_var, width=10)
+        actual_envelope_entry = self._make_entry(compare, self.actual_envelope_var, width=10, validate_digits=True)
         actual_envelope_entry.pack(side="left", padx=6)
         ttk.Label(compare, text="실제 현금").pack(side="left", padx=(12, 0))
-        actual_cash_entry = ttk.Entry(compare, textvariable=self.actual_cash_var, width=16)
+        actual_cash_entry = self._make_entry(compare, self.actual_cash_var, width=16, validate_digits=True)
         actual_cash_entry.pack(side="left", padx=6)
         ttk.Button(compare, text="검증", command=self.compare_actuals).pack(side="left", padx=8)
         ttk.Label(compare, textvariable=self.compare_result_var, style="Danger.TLabel").pack(side="left", padx=10)
@@ -791,9 +988,11 @@ class WeddingLedgerApp(tk.Tk):
 
     def build_settings_tab(self) -> None:
         self.settings_text_var = tk.StringVar()
-        ttk.Label(self.settings_tab, text="설정/백업", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
-        ttk.Label(self.settings_tab, textvariable=self.settings_text_var, style="Muted.TLabel").pack(anchor="w", pady=(0, 14))
-        buttons = ttk.Frame(self.settings_tab)
+        settings_card = ttk.Frame(self.settings_tab, padding=18, style="Card.TFrame")
+        settings_card.pack(anchor="nw", fill="x")
+        ttk.Label(settings_card, text="설정/백업", style="Section.TLabel").pack(anchor="w", pady=(0, 10))
+        ttk.Label(settings_card, textvariable=self.settings_text_var, style="Muted.TLabel").pack(anchor="w", pady=(0, 14))
+        buttons = ttk.Frame(settings_card, style="Card.TFrame")
         buttons.pack(anchor="w")
         ttk.Button(buttons, text="테스트 모드로 전환", command=lambda: self.switch_mode(MODE_TEST)).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         ttk.Button(buttons, text="운영 모드로 전환", command=lambda: self.switch_mode(MODE_LIVE)).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
@@ -862,7 +1061,7 @@ class WeddingLedgerApp(tk.Tk):
         top = tk.Toplevel(self)
         top.title("비밀번호 변경")
         top.geometry("440x260")
-        top.configure(bg="#F4EFE5")
+        top.configure(bg=BG)
         top.grab_set()
         current_var = tk.StringVar()
         new_var = tk.StringVar()

@@ -1,4 +1,4 @@
-# Wedding Ledger
+# 축의대 장부
 
 신부측 축의대에서 축의금과 식권 수를 빠르게 기록하고, 행사 후 검색/정산/엑셀 추출까지 처리하는 가벼운 오프라인 데스크톱 앱입니다.
 
@@ -34,7 +34,7 @@ python3 scripts/build_macos_app.py
 생성 결과:
 
 ```txt
-dist/WeddingLedger.app
+dist/축의대 장부.app
 ```
 
 현재 번들은 Python 3가 설치된 맥에서 실행하는 방식입니다. 완전한 단독 실행 파일은 이후 PyInstaller, py2app, Tauri 중 하나로 패키징합니다.

@@ -1,6 +1,6 @@
 import unittest
 
-from wedding_ledger.app import parse_amount, parse_required_int
+from wedding_ledger.app import is_digits_or_empty, parse_amount, parse_required_int
 
 
 class AppHelperTest(unittest.TestCase):
@@ -15,6 +15,12 @@ class AppHelperTest(unittest.TestCase):
     def test_parse_required_int_rejects_value_below_minimum(self) -> None:
         with self.assertRaisesRegex(ValueError, "봉투번호"):
             parse_required_int("0", "봉투번호", 1)
+
+    def test_digits_only_validator_allows_only_digits_or_empty(self) -> None:
+        self.assertTrue(is_digits_or_empty(""))
+        self.assertTrue(is_digits_or_empty("100000"))
+        self.assertFalse(is_digits_or_empty("100,000"))
+        self.assertFalse(is_digits_or_empty("십만원"))
 
 
 if __name__ == "__main__":

@@ -6,9 +6,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_NAME = "WeddingLedger"
+APP_NAME = "축의대 장부"
+EXECUTABLE_NAME = "WeddingLedger"
+LEGACY_APP_NAME = "WeddingLedger"
 DIST_DIR = ROOT / "dist"
 APP_DIR = DIST_DIR / f"{APP_NAME}.app"
+LEGACY_APP_DIR = DIST_DIR / f"{LEGACY_APP_NAME}.app"
 CONTENTS_DIR = APP_DIR / "Contents"
 MACOS_DIR = CONTENTS_DIR / "MacOS"
 RESOURCES_DIR = CONTENTS_DIR / "Resources"
@@ -29,7 +32,7 @@ def write_info_plist() -> None:
   <key>CFBundleDevelopmentRegion</key>
   <string>ko</string>
   <key>CFBundleDisplayName</key>
-  <string>Wedding Ledger</string>
+  <string>축의대 장부</string>
   <key>CFBundleExecutable</key>
   <string>WeddingLedger</string>
   <key>CFBundleIdentifier</key>
@@ -37,7 +40,7 @@ def write_info_plist() -> None:
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Wedding Ledger</string>
+  <string>축의대 장부</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -77,14 +80,14 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 if [ -z "$PYTHON_BIN" ]; then
-  osascript -e 'display dialog "Wedding Ledger 실행에는 Python 3가 필요합니다." buttons {"확인"} default button 1' >/dev/null 2>&1 || true
+  osascript -e 'display dialog "축의대 장부 실행에는 Python 3가 필요합니다." buttons {"확인"} default button 1' >/dev/null 2>&1 || true
   exit 1
 fi
 
 cd "$APP_SOURCE"
 exec "$PYTHON_BIN" run.py
 """
-    launcher_path = MACOS_DIR / APP_NAME
+    launcher_path = MACOS_DIR / EXECUTABLE_NAME
     launcher_path.write_text(launcher, encoding="utf-8")
     os.chmod(launcher_path, 0o755)
 
@@ -99,6 +102,8 @@ def copy_app_sources() -> None:
 def build() -> Path:
     if APP_DIR.exists():
         shutil.rmtree(APP_DIR)
+    if LEGACY_APP_DIR.exists():
+        shutil.rmtree(LEGACY_APP_DIR)
     MACOS_DIR.mkdir(parents=True, exist_ok=True)
     RESOURCES_DIR.mkdir(parents=True, exist_ok=True)
     copy_app_sources()
