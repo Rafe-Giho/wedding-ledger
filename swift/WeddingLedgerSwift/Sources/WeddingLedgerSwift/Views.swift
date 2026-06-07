@@ -845,11 +845,11 @@ struct SearchView: View {
                     filters = state.searchFilters
                 }
                 EntryTable(entries: state.searchResults, compact: layout == .compact)
-                    .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
+                    .frame(minHeight: layout == .compact ? nil : 280, maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
-        .frame(height: layout == .compact ? nil : availableHeight)
+        .frame(minHeight: layout == .compact ? nil : availableHeight)
         .onAppear {
             filters = state.searchFilters
         }
@@ -894,26 +894,97 @@ struct SummaryView: View {
                     state.filterDuplicateName(duplicate.name)
                     section = .search
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("모임별 합계")
-                        .font(.headline)
-                        .foregroundStyle(AppColors.text)
-                    Text("소속을 입력한 하객이 있을 때 참고용으로 확인하세요. 마감 검수는 위 카드가 우선입니다.")
-                        .font(.footnote)
-                        .foregroundStyle(AppColors.muted)
-                }
-                Table(state.summary.groupTotals) {
-                    TableColumn("모임", value: \.groupName)
-                    TableColumn("건수") { Text("\($0.count)") }
-                    TableColumn("총액") { Text(formatWon($0.totalAmount)).foregroundStyle(AppColors.gold) }
-                    TableColumn("식권") { Text("\($0.totalTickets)") }
-                }
-                .frame(minHeight: 260)
-                .frame(maxHeight: layout == .compact ? nil : .infinity)
+                ClosingChecklistCard(section: $section)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
-        .frame(height: layout == .compact ? nil : availableHeight)
+        .frame(minHeight: layout == .compact ? nil : availableHeight)
+    }
+}
+
+struct ClosingChecklistCard: View {
+    @EnvironmentObject private var state: AppState
+    @Binding var section: SectionKey
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("마감 검수 순서")
+                        .font(.headline)
+                        .foregroundStyle(AppColors.text)
+                    Text("모임보다 봉투, 현금, 계좌, 식권, 동명이인을 우선 확인하세요.")
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.muted)
+                }
+                Spacer()
+                Button("검색으로 확인") {
+                    section = .search
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppColors.gold)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                ClosingCheckItem(number: "1", title: "봉투 수", detail: envelopeDetail)
+                ClosingCheckItem(number: "2", title: "현금", detail: "실물 현금 \(formatWon(state.summary.paymentTotals[.cash] ?? 0)) 대조")
+                ClosingCheckItem(number: "3", title: "계좌", detail: "계좌 입금 \(formatWon(state.summary.paymentTotals[.transfer] ?? 0)) 대조")
+                ClosingCheckItem(number: "4", title: "식권", detail: ticketDetail)
+                ClosingCheckItem(number: "5", title: "누락/동명이인", detail: duplicateAndGapDetail)
+                ClosingCheckItem(number: "6", title: "백업/엑셀", detail: "마감 전 백업 후 엑셀 추출")
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(AppColors.field, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.5), lineWidth: 1))
+    }
+
+    private var envelopeDetail: String {
+        let expected = state.operationSettings.expectedEnvelopeCount
+        guard expected > 0 else { return "정상 기록 \(state.summary.activeCount)개" }
+        return "정상 \(state.summary.activeCount)개 / 예상 \(expected)개"
+    }
+
+    private var ticketDetail: String {
+        let total = state.operationSettings.totalMealTickets
+        guard total > 0 else { return "사용 \(state.summary.totalTickets)매" }
+        return "사용 \(state.summary.totalTickets)매 / 남은 \(max(0, total - state.summary.totalTickets))매"
+    }
+
+    private var duplicateAndGapDetail: String {
+        let gapText = state.summary.envelopeGaps.isEmpty ? "누락 없음" : "누락 \(state.summary.envelopeGaps.count)개"
+        let duplicateText = state.summary.duplicateNames.isEmpty ? "동명이인 없음" : "동명이인 \(state.summary.duplicateNames.count)건"
+        return "\(gapText), \(duplicateText)"
+    }
+}
+
+struct ClosingCheckItem: View {
+    let number: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(number)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AppColors.window)
+                .frame(width: 24, height: 24)
+                .background(AppColors.gold, in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.text)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.muted)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 66, alignment: .topLeading)
+        .background(AppColors.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppColors.lineSoft, lineWidth: 1))
     }
 }
 
@@ -1235,13 +1306,6 @@ struct GuideSheet: View {
                 ForEach(guideSections(for: page, settings: state.operationSettings)) { section in
                     GuideSectionCard(section: section)
                 }
-                Text("참고 링크: https://naver.me/FSvx9k1K")
-                    .font(.footnote)
-                    .foregroundStyle(AppColors.muted)
-                    .textSelection(.enabled)
-                Text("제공된 링크는 네이버 카페 앱/로그인 권한이 필요한 형태라 본문 원문은 앱에 복제하지 않았습니다. 아래 내용은 축의대 운영 일반 프로세스와 이 앱 사용 흐름을 기준으로 정리했습니다.")
-                    .font(.footnote)
-                    .foregroundStyle(AppColors.muted)
             }
             .padding(28)
         }
@@ -1343,7 +1407,7 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
             GuideSection(title: "검색/정산", items: [
                 "검색에서는 이름, 모임, 금액 범위, 식권수, 입금방식, 상태로 기록을 찾습니다.",
                 "정산에서는 봉투 대조, 식권 대조, 현금 확인, 계좌 확인 카드를 먼저 확인합니다.",
-                "모임별 합계는 소속을 입력한 기록이 있을 때 참고용으로만 봅니다."
+                "마감 검수 순서에서 실물 봉투, 현금, 계좌 입금, 남은 식권, 동명이인을 차례로 확인합니다."
             ]),
             GuideSection(title: "설정/엑셀", items: [
                 "설정에서 총 식권수와 예상 봉투수를 입력하면 입력과 정산 카드에 남은 수량과 차이가 표시됩니다.",
