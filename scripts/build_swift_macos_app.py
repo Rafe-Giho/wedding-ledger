@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_DIR = ROOT / "swift" / "WeddingLedgerSwift"
 APP_NAME = "축의대 장부"
 EXECUTABLE_NAME = "WeddingLedgerSwift"
+APP_VERSION = os.environ.get("APP_VERSION", "1.1.5")
+APP_BUILD = os.environ.get("APP_BUILD", "7")
 DIST_DIR = ROOT / "dist"
 APP_DIR = DIST_DIR / f"{APP_NAME}.app"
 CONTENTS_DIR = APP_DIR / "Contents"
@@ -46,8 +48,8 @@ def write_info_plist() -> None:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "1.1.5",
-        "CFBundleVersion": "7",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": APP_BUILD,
         "LSMinimumSystemVersion": "14.0",
         "NSHighResolutionCapable": True,
     }
@@ -56,7 +58,12 @@ def write_info_plist() -> None:
 
 
 def sign_app() -> None:
-    subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(APP_DIR)], check=True)
+    identity = os.environ.get("CODESIGN_IDENTITY", "-")
+    command = ["/usr/bin/codesign", "--force", "--deep"]
+    if identity != "-":
+        command.extend(["--options", "runtime", "--timestamp"])
+    command.extend(["--sign", identity, str(APP_DIR)])
+    subprocess.run(command, check=True)
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=2", str(APP_DIR)], check=True)
 
 

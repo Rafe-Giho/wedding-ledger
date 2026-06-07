@@ -1,0 +1,109 @@
+name: Release notarized macOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v1.1.6"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate version
+        run: |
+          case "${{ inputs.version }}" in
+            v*) ;;
+            *) echo "version must start with v, for example v1.1.6" >&2; exit 1 ;;
+          esac
+
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          test -n "$P12_BASE64"
+          test -n "$P12_PASSWORD"
+          test -n "$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "$P12_BASE64" | base64 --decode > developer-id-application.p12
+          security import developer-id-application.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Resolve signing identity
+        id: signing
+        run: |
+          IDENTITY="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          if [ -z "$IDENTITY" ]; then
+            echo "Developer ID Application identity was not found." >&2
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed app
+        env:
+          CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          APP_VERSION="${VERSION#v}" APP_BUILD="$GITHUB_RUN_NUMBER" python3 scripts/build_swift_macos_app.py
+
+      - name: Notarize and staple app
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          mkdir -p private_keys
+          printf "%s" "$APP_STORE_CONNECT_PRIVATE_KEY" > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          ditto -c -k --keepParent "dist/축의대 장부.app" dist/notary-app.zip
+          xcrun notarytool submit dist/notary-app.zip \
+            --key "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "dist/축의대 장부.app"
+          xcrun stapler validate "dist/축의대 장부.app"
+
+      - name: Create DMG
+        run: scripts/create_macos_dmg.sh "${{ inputs.version }}"
+
+      - name: Notarize and staple DMG
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          DMG="dist/wedding-ledger-${{ inputs.version }}-macOS.dmg"
+          xcrun notarytool submit "$DMG" \
+            --key "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+
+      - name: Verify signed app
+        run: |
+          codesign --verify --deep --strict --verbose=2 "dist/축의대 장부.app"
+          spctl --assess --type execute --verbose=4 "dist/축의대 장부.app"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.version }}" \
+            "dist/wedding-ledger-${{ inputs.version }}-macOS.dmg" \
+            --target main \
+            --title "${{ inputs.version }}" \
+            --notes "Notarized macOS DMG release. Download the DMG, open it, and drag 축의대 장부.app to Applications."

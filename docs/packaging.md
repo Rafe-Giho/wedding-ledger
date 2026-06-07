@@ -38,6 +38,8 @@ codesign --verify --deep --strict --verbose=2 "dist/축의대 장부.app"
 
 Apple Developer ID 공증은 아직 적용하지 않았다. GitHub에서 내려받은 앱이 macOS에서 `손상되었기 때문에 열 수 없습니다` 또는 `Apple은 악성 코드가 없음을 확인할 수 없습니다`라고 표시되면 실제 파일 손상보다 Gatekeeper 격리 속성 때문일 가능성이 높다.
 
+일반 macOS 앱처럼 DMG를 열고 Applications로 드래그하는 배포를 만들려면 [Apple Notarization](apple-notarization.md)을 완료한다.
+
 권장 설치:
 
 ```bash

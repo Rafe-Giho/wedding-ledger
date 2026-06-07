@@ -26,6 +26,8 @@
 dist/축의대 장부.app
 ```
 
+일반 macOS 앱처럼 DMG를 열고 Applications로 드래그해 설치하려면 Apple Developer ID notarization이 필요합니다. 준비 방법은 [Apple Notarization](docs/apple-notarization.md)을 참고하세요.
+
 권장 설치:
 
 ```bash
