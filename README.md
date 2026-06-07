@@ -1,34 +1,38 @@
 # 축의대 장부
 
-축의대에서 축의금과 식권 수를 빠르게 기록하고, 행사 후 검색/정산/엑셀 추출까지 처리하는 가벼운 오프라인 데스크톱 앱입니다.
+한국 결혼식 축의대에서 축의금, 봉투, 식권 수를 빠르게 기록하고 행사 후 검색, 정산, 엑셀 추출까지 처리하는 가벼운 오프라인 macOS 앱입니다.
 
 ## 특징
 
-- 외부 의존성 없음: Python 3.11 표준 라이브러리만 사용
-- 맥북에어에서 바로 실행 가능한 Tkinter 데스크톱 앱
+- SwiftUI 기반 macOS 데스크톱 앱
 - SQLite 로컬 저장
-- 한/영 입력 상태를 보정하는 비밀번호와 복구키 기반 재설정
-- 자동 백업, 백업 복원
-- 입력/검색/정산/설정 화면
-- Excel에서 열리는 `.xls` 내보내기
+- 앱 비밀번호, 복구키 기반 재설정
 - 테스트 모드와 운영 모드 분리
+- 입력/검색/정산/설정 화면
+- 모임/관계 입력값 자동 목록화
+- 동명이인 즉시 확인 및 새 동명이인 저장
+- 취소/복구 이력 저장
+- 자동 백업, 백업 복원
+- 함수와 필터가 포함된 `.xlsx` 엑셀 추출
 
 ## 실행
 
-```bash
-python3 run.py
+릴리즈 앱 번들:
+
+```txt
+dist/축의대 장부.app
 ```
 
-## 테스트
+개발 실행:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+swift run --package-path swift/WeddingLedgerSwift
 ```
 
 ## macOS 앱 번들 만들기
 
 ```bash
-python3 scripts/build_macos_app.py
+python3 scripts/build_swift_macos_app.py
 ```
 
 생성 결과:
@@ -36,8 +40,6 @@ python3 scripts/build_macos_app.py
 ```txt
 dist/축의대 장부.app
 ```
-
-현재 번들은 Python 3가 설치된 맥에서 실행하는 방식입니다. 완전한 단독 실행 파일은 이후 PyInstaller, py2app, Tauri 중 하나로 패키징합니다.
 
 ## 데이터 저장 위치
 
@@ -51,7 +53,7 @@ dist/축의대 장부.app
 
 ## 현장 운영 순서
 
-1. `python3 run.py`로 앱 실행
+1. 앱 실행
 2. 최초 실행 시 비밀번호 설정
 3. 표시되는 복구키를 따로 보관
 4. 테스트 모드에서 입력 연습
@@ -59,12 +61,12 @@ dist/축의대 장부.app
 6. 운영 모드로 전환
 7. 축의금 입력
 8. 정산 화면에서 봉투 수, 현금, 식권 수 검증
-9. 엑셀 추출
+9. 설정에서 `.xlsx` 엑셀 추출
 
 ## 복구 방법
 
 - 비밀번호 분실: 로그인 화면의 `비밀번호를 잊으셨나요?`에서 복구키로 새 비밀번호 설정
-- 데이터 복구: 설정/백업 화면의 `백업 복원`에서 백업 DB 선택
+- 데이터 복구: 설정의 `백업 복원`에서 백업 DB 선택
 - 백업 위치: `~/Library/Application Support/WeddingLedger/backups/`
 
 복구키를 잃으면 앱 비밀번호를 복구할 수 없습니다.

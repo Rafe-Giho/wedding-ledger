@@ -6,10 +6,10 @@
 
 ## 현재 방식
 
-외부 의존성 없이 표준 라이브러리만 사용해서 앱 번들을 만든다.
+Swift Package를 release 모드로 빌드한 뒤 macOS 앱 번들 구조로 묶는다.
 
 ```bash
-python3 scripts/build_macos_app.py
+python3 scripts/build_swift_macos_app.py
 ```
 
 생성 결과:
@@ -18,14 +18,16 @@ python3 scripts/build_macos_app.py
 dist/축의대 장부.app
 ```
 
-이 번들은 앱 코드와 실행 스크립트를 포함한다. 실행할 맥에는 Python 3이 설치되어 있어야 한다.
+## 요구 사항
 
-## 최종 배포 후보
+- macOS 14 이상
+- Swift 빌드 환경은 개발/패키징 시에만 필요
+- 생성된 앱 번들은 앱 실행 시 Python이 필요하지 않음
 
-완전한 단독 실행 파일이 필요하면 이후 아래 중 하나로 전환한다.
+## 버전
 
-- PyInstaller
-- py2app
-- Tauri 래핑
+현재 Swift 앱 번들 버전은 `1.1.0`이다.
 
-위 방식은 외부 의존성 추가가 필요하므로 별도 승인 후 진행한다.
+## 레거시
+
+Python/Tkinter 버전은 레거시 브랜치 또는 기존 스크립트 참고용으로만 유지한다. 배포 기준은 Swift 앱이다.
