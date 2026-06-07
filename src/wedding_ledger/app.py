@@ -204,7 +204,7 @@ class SuggestionEntry(ttk.Frame):
         self.variable = textvariable
         self.values: list[str] = []
         self.values_provider = values_provider
-        self.popup: tk.Toplevel | None = None
+        self.popup: tk.Menu | None = None
         self.entry = tk.Entry(
             self,
             textvariable=textvariable,
@@ -243,51 +243,31 @@ class SuggestionEntry(ttk.Frame):
         self.hide_popup()
         if self.values_provider:
             self.configure_values(self.values_provider())
-        if not self.values:
-            self.values = ["저장된 목록이 없습니다"]
-        self.popup = tk.Toplevel(self)
-        self.popup.overrideredirect(True)
-        self.popup.configure(bg=BORDER)
-        x = self.winfo_rootx()
-        y = self.winfo_rooty() + self.winfo_height() + 2
-        width = max(self.winfo_width(), 220)
-        height = min(max(len(self.values), 1), 8) * 30 + 4
-        self.popup.geometry(f"{width}x{height}+{x}+{y}")
-        listbox = tk.Listbox(
-            self.popup,
-            font=INPUT_FONT,
-            bg=SURFACE,
-            fg=TEXT,
-            activebackground=ACCENT_LIGHT,
-            activeforeground=TEXT,
-            selectbackground=ACCENT,
-            selectforeground="#FFFFFF",
-            relief="flat",
-            highlightthickness=0,
-            exportselection=False,
-        )
-        listbox.pack(fill="both", expand=True, padx=1, pady=1)
-        for value in self.values:
-            listbox.insert("end", value)
+        menu = tk.Menu(self, tearoff=False, font=INPUT_FONT)
+        if self.values:
+            for value in self.values:
+                menu.add_command(label=value, command=lambda selected=value: self.select_value(selected))
+        else:
+            menu.add_command(label="저장된 목록이 없습니다", state="disabled")
+        self.popup = menu
+        try:
+            menu.tk_popup(self.button.winfo_rootx(), self.button.winfo_rooty() + self.button.winfo_height() + 4)
+        finally:
+            menu.grab_release()
 
-        def choose(_event: tk.Event | None = None) -> str:
-            selection = listbox.curselection()
-            if selection and self.values[selection[0]] != "저장된 목록이 없습니다":
-                self.variable.set(listbox.get(selection[0]))
-            self.hide_popup()
-            self.entry.focus_set()
-            self.entry.icursor("end")
-            return "break"
-
-        listbox.bind("<ButtonRelease-1>", choose)
-        listbox.bind("<Return>", choose)
-        listbox.bind("<Escape>", lambda _event: self.hide_popup())
-        listbox.focus_set()
-        listbox.selection_set(0)
+    def select_value(self, value: str) -> None:
+        self.variable.set(value)
+        self.hide_popup()
+        self.entry.focus_set()
+        self.entry.icursor("end")
 
     def hide_popup(self) -> str:
-        if self.popup and self.popup.winfo_exists():
-            self.popup.destroy()
+        if self.popup:
+            try:
+                self.popup.unpost()
+                self.popup.destroy()
+            except tk.TclError:
+                pass
         self.popup = None
         return "break"
 

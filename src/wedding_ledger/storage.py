@@ -276,6 +276,7 @@ class WeddingLedgerDB:
     def lookup_values(self, kind: str, limit: int = 50) -> list[str]:
         if kind not in ("group", "relationship"):
             raise ValueError("지원하지 않는 목록 종류입니다.")
+        entry_column = "group_name" if kind == "group" else "relationship"
         rows = self.conn.execute(
             """
             SELECT value
@@ -286,7 +287,24 @@ class WeddingLedgerDB:
             """,
             (kind, limit),
         ).fetchall()
-        values = [row["value"] for row in rows]
+        entry_rows = self.conn.execute(
+            f"""
+            SELECT {entry_column} AS value
+            FROM entries
+            WHERE TRIM({entry_column}) != ''
+            GROUP BY {entry_column}
+            ORDER BY COUNT(*) DESC, MAX(updated_at) DESC, value ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        values: list[str] = []
+        for row in [*rows, *entry_rows]:
+            value = str(row["value"]).strip()
+            if value and value not in values:
+                values.append(value)
+            if len(values) >= limit:
+                break
         if kind == "group" and DEFAULT_GROUP not in values:
             values.insert(0, DEFAULT_GROUP)
         return values

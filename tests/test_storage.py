@@ -70,6 +70,24 @@ class StorageTest(unittest.TestCase):
         self.assertIn("신부친구", self.db.recent_groups())
         self.assertIn("고등학교", self.db.recent_relationships())
 
+    def test_lookup_values_fall_back_to_saved_entries(self) -> None:
+        self.db.setup_auth("secret123")
+        self.db.create_entry(
+            {
+                "name": "김민수",
+                "group_name": "가족",
+                "relationship": "사촌",
+                "amount": 100000,
+                "meal_ticket_count": 1,
+                "payment_method": "cash",
+            }
+        )
+        self.db.conn.execute("DELETE FROM lookup_items")
+        self.db.conn.commit()
+
+        self.assertIn("가족", self.db.recent_groups())
+        self.assertIn("사촌", self.db.recent_relationships())
+
     def test_lookup_values_survive_reopen(self) -> None:
         app_dir = Path(self.tempdir.name)
         self.db.setup_auth("secret123")
