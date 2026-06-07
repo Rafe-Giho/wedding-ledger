@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-VERSION="${WEDDING_LEDGER_VERSION:-v1.1.3}"
+VERSION="${WEDDING_LEDGER_VERSION:-v1.1.4}"
 REPO="Rafe-Giho/wedding-ledger"
 case "$VERSION" in
   v*) TAG="$VERSION" ;;
