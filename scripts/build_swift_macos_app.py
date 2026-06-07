@@ -46,7 +46,7 @@ def write_info_plist() -> None:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "1.1.0",
+        "CFBundleShortVersionString": "1.1.1",
         "CFBundleVersion": "1",
         "LSMinimumSystemVersion": "14.0",
         "NSHighResolutionCapable": True,
