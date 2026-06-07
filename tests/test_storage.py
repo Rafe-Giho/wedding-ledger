@@ -70,6 +70,120 @@ class StorageTest(unittest.TestCase):
         self.assertIn("신부친구", self.db.recent_groups())
         self.assertIn("고등학교", self.db.recent_relationships())
 
+    def test_lookup_values_survive_reopen(self) -> None:
+        app_dir = Path(self.tempdir.name)
+        self.db.setup_auth("secret123")
+        self.db.create_entry(
+            {
+                "name": "최유나",
+                "group_name": "대학교",
+                "relationship": "동기",
+                "amount": 100000,
+                "meal_ticket_count": 1,
+                "payment_method": "cash",
+            }
+        )
+        self.db.close()
+
+        reopened = WeddingLedgerDB(app_dir)
+        try:
+            self.assertIn("대학교", reopened.recent_groups())
+            self.assertIn("동기", reopened.recent_relationships())
+        finally:
+            reopened.close()
+            self.db = WeddingLedgerDB(app_dir)
+
+    def test_duplicate_envelope_is_rejected(self) -> None:
+        self.db.setup_auth("secret123")
+        payload = {
+            "envelope_no": 7,
+            "name": "한지민",
+            "amount": 50000,
+            "meal_ticket_count": 0,
+            "payment_method": "cash",
+        }
+        self.db.create_entry(payload)
+        with self.assertRaisesRegex(ValueError, "봉투번호"):
+            self.db.create_entry({**payload, "name": "한지민2"})
+
+    def test_search_filters_by_name_group_amount_ticket_and_payment(self) -> None:
+        self.db.setup_auth("secret123")
+        rows = [
+            {
+                "name": "강민지",
+                "group_name": "회사",
+                "amount": 100000,
+                "meal_ticket_count": 1,
+                "payment_method": "cash",
+            },
+            {
+                "name": "강수연",
+                "group_name": "친구",
+                "amount": 200000,
+                "meal_ticket_count": 2,
+                "payment_method": "transfer",
+            },
+            {
+                "name": "이서연",
+                "group_name": "회사",
+                "amount": 300000,
+                "meal_ticket_count": 2,
+                "payment_method": "cash",
+            },
+        ]
+        for row in rows:
+            self.db.create_entry(row)
+
+        result = self.db.find_entries(
+            {
+                "name": "강",
+                "min_amount": 150000,
+                "max_amount": 250000,
+                "meal_ticket_count": 2,
+                "payment_method": "transfer",
+            }
+        )
+        self.assertEqual([row["name"] for row in result], ["강수연"])
+
+        company_rows = self.db.find_entries({"group_name": "회사", "payment_method": "cash"})
+        self.assertEqual({row["name"] for row in company_rows}, {"강민지", "이서연"})
+
+    def test_backup_restore_recovers_previous_state(self) -> None:
+        self.db.setup_auth("secret123")
+        original = self.db.create_entry(
+            {
+                "name": "원본",
+                "amount": 50000,
+                "meal_ticket_count": 1,
+                "payment_method": "cash",
+            }
+        )
+        backup = self.db.create_backup("test")
+        self.db.update_entry(original["id"], {**original, "amount": 100000}, "복원 테스트")
+        self.db.create_entry(
+            {
+                "name": "추가",
+                "amount": 30000,
+                "meal_ticket_count": 0,
+                "payment_method": "cash",
+            }
+        )
+
+        before_restore = self.db.restore_from_backup(backup)
+        self.assertTrue(before_restore.exists())
+        restored_rows = self.db.find_entries({})
+        self.assertEqual(len(restored_rows), 1)
+        self.assertEqual(restored_rows[0]["name"], "원본")
+        self.assertEqual(restored_rows[0]["amount"], 50000)
+
+    def test_backups_do_not_overwrite_within_same_second(self) -> None:
+        self.db.setup_auth("secret123")
+        first = self.db.create_backup("same_second")
+        second = self.db.create_backup("same_second")
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.exists())
+        self.assertTrue(second.exists())
+
     def test_backup_and_clear_test_data(self) -> None:
         self.db.setup_auth("secret123")
         self.db.create_entry(

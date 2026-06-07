@@ -604,7 +604,7 @@ class WeddingLedgerDB:
         return [dict(row) for row in rows]
 
     def create_backup(self, label: str = "auto") -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         safe_label = "".join(ch for ch in label if ch.isalnum() or ch in ("_", "-")) or "auto"
         target = self.backup_dir / f"wedding_ledger_{safe_label}_{timestamp}.sqlite3"
         self.conn.commit()
