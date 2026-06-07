@@ -45,16 +45,16 @@ struct FieldLabel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(AppColors.text)
             content
-                .padding(.horizontal, 14)
-                .frame(minHeight: 54)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.field, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 17).stroke(AppColors.line.opacity(0.65), lineWidth: 1))
+                .background(AppColors.field, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 15).stroke(AppColors.line.opacity(0.65), lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -181,17 +181,6 @@ struct ModePill: View {
             .padding(.vertical, 8)
             .background(AppColors.field, in: Capsule())
             .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
-    }
-}
-
-struct TrafficDotsView: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            Circle().fill(Color(red: 1.0, green: 0.40, blue: 0.36))
-            Circle().fill(Color(red: 0.96, green: 0.75, blue: 0.25))
-            Circle().fill(Color(red: 0.28, green: 0.79, blue: 0.35))
-        }
-        .frame(width: 75, height: 17)
     }
 }
 

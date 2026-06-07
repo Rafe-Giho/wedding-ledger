@@ -51,6 +51,7 @@ enum ResponsiveLayout {
     var contentPadding: CGFloat { self == .compact ? 18 : 30 }
     var entryFormWidth: CGFloat { self == .medium ? 460 : 496 }
     var cardPadding: CGFloat { self == .compact ? 22 : 30 }
+    var recentEntriesHeight: CGFloat { self == .compact ? 220 : 260 }
 }
 
 struct RootView: View {
@@ -93,10 +94,6 @@ struct ShellView: View {
             let layout = ResponsiveLayout(width: proxy.size.width)
             ZStack(alignment: .topLeading) {
                 WindowBackground()
-                TrafficDotsView()
-                    .padding(.top, 24)
-                    .padding(.leading, 26)
-                    .opacity(layout.showsSidebar ? 1 : 0)
                 if layout.showsSidebar {
                     HStack(spacing: 0) {
                         SidebarView(section: $section, width: layout.sidebarWidth)
@@ -134,13 +131,13 @@ struct WorkspaceView: View {
     let layout: ResponsiveLayout
 
     var body: some View {
-        VStack(spacing: 26) {
+        VStack(spacing: 20) {
             TopBarView(compact: false)
             WorkspaceContent(section: $section, layout: layout)
         }
-        .padding(.top, 34)
+        .padding(.top, 26)
         .padding(.horizontal, layout.contentPadding)
-        .padding(.bottom, 30)
+        .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -241,9 +238,9 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             BrandLockup(horizontal: false)
-                .padding(.top, 86)
-                .padding(.bottom, 54)
-            VStack(spacing: 18) {
+                .padding(.top, 58)
+                .padding(.bottom, 42)
+            VStack(spacing: 14) {
                 ForEach(SectionKey.allCases) { item in
                     NavigationButton(item: item, isActive: section == item) {
                         section = item
@@ -317,9 +314,12 @@ struct NavigationButton: View {
             }
             .padding(.horizontal, 20)
             .frame(height: 68)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(isActive ? AppColors.sidebarActive : Color.clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -347,7 +347,7 @@ struct EntryDashboardView: View {
         if layout.stacksEntry {
             VStack(spacing: 18) {
                 EntryFormView(compact: layout.stacksPairs)
-                RecentEntriesCard { section = .search }
+                RecentEntriesCard(listHeight: layout.recentEntriesHeight) { section = .search }
                 SummaryCardsRow()
                 ThanksCard()
             }
@@ -356,7 +356,7 @@ struct EntryDashboardView: View {
                 EntryFormView(compact: false)
                     .frame(width: layout.entryFormWidth)
                 VStack(spacing: 18) {
-                    RecentEntriesCard { section = .search }
+                    RecentEntriesCard(listHeight: layout.recentEntriesHeight) { section = .search }
                     SummaryCardsRow()
                     ThanksCard()
                 }
@@ -371,10 +371,10 @@ struct EntryFormView: View {
     let compact: Bool
 
     var body: some View {
-        Card(padding: compact ? 24 : 30) {
-            VStack(alignment: .leading, spacing: 24) {
+        Card(padding: compact ? 18 : 20) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("새로운 축의 입력")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppColors.text)
                 AdaptivePair(stacked: compact) {
                     FieldLabel("봉투번호") {
@@ -431,24 +431,28 @@ struct EntryFormView: View {
                         .buttonStyle(.borderless)
                     }
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("금액 빠른 선택")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.text)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
-                        ForEach(defaultQuickAmounts, id: \.self) { amount in
-                            PillButton(formatNumber(amount)) {
-                                state.draft.amountText = formatNumber(amount)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 10) {
+                            ForEach(defaultQuickAmounts, id: \.self) { amount in
+                                PillButton(formatNumber(amount)) {
+                                    state.draft.amountText = formatNumber(amount)
+                                }
+                            }
+                            PillButton("+1만원", outlined: true) {
+                                state.draft.amountText = formatNumber(state.draft.amount + 10_000)
                             }
                         }
-                        PillButton("+1만원", outlined: true) {
-                            state.draft.amountText = formatNumber(state.draft.amount + 10_000)
-                        }
+                        .padding(.vertical, 1)
                     }
+                    .scrollIndicators(.hidden)
                 }
                 FieldLabel("메모 (선택)") {
                     TextEditor(text: $state.draft.memo)
-                        .frame(height: 96)
+                        .frame(height: 52)
                         .scrollContentBackground(.hidden)
                 }
                 Button {
@@ -458,7 +462,7 @@ struct EntryFormView: View {
                     Text("저장")
                         .font(.system(size: 20, weight: .semibold))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 60)
+                        .frame(height: 52)
                         .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .foregroundStyle(AppColors.window)
                 }
@@ -470,11 +474,12 @@ struct EntryFormView: View {
 
 struct RecentEntriesCard: View {
     @EnvironmentObject private var state: AppState
+    let listHeight: CGFloat
     let showAll: () -> Void
 
     var body: some View {
-        Card(padding: 28) {
-            VStack(alignment: .leading, spacing: 18) {
+        Card(padding: 22) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("최근 입력 내역")
                         .font(.system(size: 24, weight: .bold))
@@ -484,7 +489,11 @@ struct RecentEntriesCard: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(AppColors.text)
                 }
-                EntryTable(entries: state.recentEntries, compact: true)
+                ScrollView {
+                    EntryTable(entries: state.recentEntries, compact: true)
+                }
+                .frame(height: listHeight)
+                .scrollIndicators(.visible)
             }
         }
     }
@@ -886,12 +895,12 @@ struct AdaptivePair<First: View, Second: View>: View {
 
     var body: some View {
         if stacked {
-            VStack(spacing: 18) {
+            VStack(spacing: 12) {
                 first
                 second
             }
         } else {
-            HStack(spacing: 28) {
+            HStack(spacing: 16) {
                 first
                 second
             }
