@@ -400,11 +400,11 @@ final class LedgerStore {
     }
 
     @discardableResult
-    func exportXLS(to url: URL, mode: LedgerMode? = nil) throws -> URL {
+    func exportXLSX(to url: URL, mode: LedgerMode? = nil) throws -> URL {
         let exportMode = mode ?? self.mode()
         let entries = try findEntries(mode: exportMode)
         let summary = try summary(mode: exportMode)
-        let output = try exportXLSFile(to: url, entries: entries, summary: summary, auditRows: auditRows())
+        let output = try exportXLSXFile(to: url, entries: entries, summary: summary, auditRows: auditRows(), mode: exportMode)
         chmod(output.path, 0o600)
         return output
     }

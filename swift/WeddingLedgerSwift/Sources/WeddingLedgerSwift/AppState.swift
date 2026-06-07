@@ -176,7 +176,7 @@ final class AppState: ObservableObject {
     func exportExcel(to url: URL) {
         do {
             let backup = try store.createBackup(label: "before_export")
-            let output = try store.exportXLS(to: url, mode: mode)
+            let output = try store.exportXLSX(to: url, mode: mode)
             message = "엑셀 추출 완료: \(output.path)\n백업: \(backup.path)"
         } catch {
             message = error.localizedDescription
