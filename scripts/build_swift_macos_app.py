@@ -46,13 +46,18 @@ def write_info_plist() -> None:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "1.1.1",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": "1.1.2",
+        "CFBundleVersion": "4",
         "LSMinimumSystemVersion": "14.0",
         "NSHighResolutionCapable": True,
     }
     with (CONTENTS_DIR / "Info.plist").open("wb") as file:
         plistlib.dump(payload, file)
+
+
+def sign_app() -> None:
+    subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(APP_DIR)], check=True)
+    subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=2", str(APP_DIR)], check=True)
 
 
 def build_app() -> Path:
@@ -64,6 +69,7 @@ def build_app() -> Path:
     shutil.copy2(binary, MACOS_DIR / EXECUTABLE_NAME)
     os.chmod(MACOS_DIR / EXECUTABLE_NAME, 0o755)
     write_info_plist()
+    sign_app()
     return APP_DIR
 
 

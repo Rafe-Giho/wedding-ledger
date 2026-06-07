@@ -44,6 +44,18 @@ python3 scripts/build_swift_macos_app.py
 dist/축의대 장부.app
 ```
 
+## 다운로드 앱이 손상됐다고 나올 때
+
+GitHub에서 받은 앱이 `손상되었기 때문에 열 수 없습니다`라고 나오면, 실제 파일 손상보다 macOS Gatekeeper 격리 속성 때문일 가능성이 높습니다.
+
+앱을 `응용 프로그램` 폴더로 옮긴 뒤 아래 명령을 한 번 실행하세요.
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/축의대 장부.app"
+```
+
+또는 Finder에서 앱을 Control-클릭한 뒤 `열기`를 선택하세요.
+
 ## 데이터 저장 위치
 
 기본 데이터는 아래 위치에 저장됩니다.
