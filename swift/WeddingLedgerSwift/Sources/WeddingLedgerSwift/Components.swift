@@ -127,7 +127,8 @@ struct StatCard: View {
     var fillsHeight = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let compact = fillsHeight
+        VStack(alignment: .leading, spacing: compact ? 10 : 16) {
             HStack {
                 Text(title)
                     .font(.headline)
@@ -135,19 +136,20 @@ struct StatCard: View {
                 Spacer()
                 Image(systemName: symbol)
                     .foregroundStyle(AppColors.gold)
-                    .frame(width: 34, height: 34)
+                    .frame(width: compact ? 30 : 34, height: compact ? 30 : 34)
                     .overlay(Circle().stroke(AppColors.gold.opacity(0.45)))
             }
             Text(value)
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: compact ? 26 : 30, weight: .bold))
                 .foregroundStyle(AppColors.text)
                 .minimumScaleFactor(0.75)
             Text(footnote)
-                .font(.subheadline)
+                .font(compact ? .caption : .subheadline)
                 .foregroundStyle(AppColors.muted)
+                .lineLimit(2)
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 164, maxHeight: fillsHeight ? .infinity : nil)
+        .padding(compact ? 18 : 22)
+        .frame(maxWidth: .infinity, minHeight: compact ? 126 : 164)
         .background(AppColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.48)))
     }

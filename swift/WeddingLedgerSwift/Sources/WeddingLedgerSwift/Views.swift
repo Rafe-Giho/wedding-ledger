@@ -141,9 +141,11 @@ struct ShellView: View {
                     }
                 }
                 WindowZoomStrip()
-                    .frame(height: 26)
-                    .padding(.leading, 88)
+                    .frame(height: 36)
+                    .padding(.leading, 74)
+                    .padding(.trailing, 14)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .zIndex(20)
             }
         }
         .background(AppColors.background)
@@ -159,16 +161,49 @@ struct WindowZoomStrip: NSViewRepresentable {
 }
 
 final class WindowZoomStripView: NSView {
+    private var restoreFrame: NSRect?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard let window else {
             super.mouseDown(with: event)
             return
         }
         if event.clickCount == 2 {
-            window.performZoom(nil)
+            toggleWindowFill(window)
         } else {
             window.performDrag(with: event)
         }
+    }
+
+    private func toggleWindowFill(_ window: NSWindow) {
+        guard let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else {
+            window.performZoom(nil)
+            return
+        }
+        if window.frame.isClose(to: visibleFrame) {
+            if let restoreFrame {
+                window.setFrame(restoreFrame, display: true, animate: true)
+                self.restoreFrame = nil
+            } else {
+                window.performZoom(nil)
+            }
+            return
+        }
+        restoreFrame = window.frame
+        window.setFrame(visibleFrame, display: true, animate: true)
+    }
+}
+
+private extension NSRect {
+    func isClose(to other: NSRect) -> Bool {
+        abs(origin.x - other.origin.x) < 4 &&
+        abs(origin.y - other.origin.y) < 4 &&
+        abs(size.width - other.size.width) < 4 &&
+        abs(size.height - other.size.height) < 4
     }
 }
 
@@ -488,7 +523,7 @@ struct EntryDashboardView: View {
                     RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     SummaryCardsRow(fillsHeight: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity)
                     ThanksCard()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -506,10 +541,11 @@ struct EntryFormView: View {
     var fillsHeight = false
 
     var body: some View {
-        Card(padding: compact ? 18 : 20, fillsAvailableSpace: fillsHeight) {
-            VStack(alignment: .leading, spacing: 12) {
+        let dense = fillsHeight && !compact
+        Card(padding: compact ? 18 : (dense ? 18 : 20), fillsAvailableSpace: fillsHeight) {
+            VStack(alignment: .leading, spacing: dense ? 9 : 12) {
                 Text("새로운 축의 입력")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: dense ? 21 : 22, weight: .bold))
                     .foregroundStyle(AppColors.text)
                 AdaptivePair(stacked: compact) {
                     FieldLabel("봉투번호") {
@@ -573,7 +609,7 @@ struct EntryFormView: View {
                     Text("금액 빠른 선택")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.text)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: dense ? 86 : 92), spacing: dense ? 8 : 10)], spacing: dense ? 8 : 10) {
                         ForEach(defaultQuickAmounts, id: \.self) { amount in
                             PillButton(formatNumber(amount)) {
                                 state.draft.amountText = formatNumber(amount)
@@ -586,8 +622,11 @@ struct EntryFormView: View {
                 }
                 FieldLabel("메모 (선택)") {
                     TextEditor(text: $state.draft.memo)
-                        .frame(minHeight: 52, maxHeight: fillsHeight ? .infinity : 52)
+                        .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
                         .scrollContentBackground(.hidden)
+                }
+                if fillsHeight {
+                    Spacer(minLength: 0)
                 }
                 if state.duplicateMatches.isEmpty {
                     Button {
@@ -597,7 +636,7 @@ struct EntryFormView: View {
                         Text("저장")
                             .font(.system(size: 20, weight: .semibold))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 52)
+                            .frame(height: dense ? 48 : 52)
                             .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .foregroundStyle(AppColors.window)
                     }
@@ -612,6 +651,7 @@ struct EntryFormView: View {
                     }
                 }
             }
+            .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         }
     }
 }
@@ -714,7 +754,7 @@ struct SummaryCardsRow: View {
     var fillsHeight = false
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 18) {
+        LazyVGrid(columns: columns, spacing: fillsHeight ? 12 : 18) {
             StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign", fillsHeight: fillsHeight)
             StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: ticketFootnote, symbol: "fork.knife", fillsHeight: fillsHeight)
             StatCard(title: "총 봉투수", value: "\(state.summary.activeCount)개", footnote: envelopeFootnote, symbol: "envelope", fillsHeight: fillsHeight)
@@ -727,12 +767,11 @@ struct SummaryCardsRow: View {
             )
         }
         .frame(maxWidth: .infinity)
-        .frame(maxHeight: fillsHeight ? .infinity : nil)
     }
 
     private var columns: [GridItem] {
         fillsHeight
-            ? [GridItem(.flexible(minimum: 160), spacing: 18), GridItem(.flexible(minimum: 160), spacing: 18)]
+            ? [GridItem(.flexible(minimum: 150), spacing: 12), GridItem(.flexible(minimum: 150), spacing: 12)]
             : [GridItem(.adaptive(minimum: 190), spacing: 18)]
     }
 
