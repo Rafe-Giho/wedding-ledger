@@ -205,6 +205,19 @@ final class LedgerStore {
         return !(try db.query(sql, values)).isEmpty
     }
 
+    func activeEntriesNamed(mode: LedgerMode, name: String) throws -> [LedgerEntry] {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else { return [] }
+        return try db.query(
+            """
+            SELECT * FROM entries
+            WHERE mode = ? AND name = ? AND status = ?
+            ORDER BY envelope_no ASC, created_at ASC
+            """,
+            [.text(mode.rawValue), .text(cleanName), .text(EntryStatus.active.rawValue)]
+        ).map(entryFromRow)
+    }
+
     func createEntry(_ draft: EntryDraft, mode: LedgerMode) throws -> LedgerEntry {
         let clean = try validateDraft(draft, mode: mode)
         let id = UUID().uuidString
@@ -242,8 +255,8 @@ final class LedgerStore {
             values.append(.text(mode.rawValue))
         }
         if !filters.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            clauses.append("name LIKE ?")
-            values.append(.text("%\(filters.name)%"))
+            clauses.append(filters.exactName ? "name = ?" : "name LIKE ?")
+            values.append(.text(filters.exactName ? filters.name.trimmingCharacters(in: .whitespacesAndNewlines) : "%\(filters.name)%"))
         }
         if !filters.groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             clauses.append("group_name LIKE ?")

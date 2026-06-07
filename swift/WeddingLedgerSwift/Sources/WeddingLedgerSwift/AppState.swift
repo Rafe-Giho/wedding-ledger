@@ -10,14 +10,15 @@ final class AppState: ObservableObject {
     @Published var draft = EntryDraft(envelopeNo: 1)
     @Published var recentEntries: [LedgerEntry] = []
     @Published var searchResults: [LedgerEntry] = []
+    @Published var searchFilters = EntryFilters()
     @Published var summary: LedgerSummary = .empty
+    @Published var duplicateMatches: [LedgerEntry] = []
     @Published var groups: [String] = [defaultGroup]
     @Published var relationships: [String] = []
     @Published var message = ""
     @Published var recoveryKeyToShow: String?
 
     let store: LedgerStore
-    private var currentSearchFilters = EntryFilters()
 
     init(store: LedgerStore) {
         self.store = store
@@ -34,7 +35,8 @@ final class AppState: ObservableObject {
             relationships = try store.recentRelationships()
             recentEntries = try store.lastEntries(mode: mode, limit: 8)
             summary = try store.summary(mode: mode)
-            searchResults = try store.findEntries(filters: currentSearchFilters, mode: mode)
+            searchResults = try store.findEntries(filters: searchFilters, mode: mode)
+            duplicateMatches = try store.activeEntriesNamed(mode: mode, name: draft.name)
         } catch {
             message = error.localizedDescription
         }
@@ -66,12 +68,15 @@ final class AppState: ObservableObject {
 
     func saveEntry(forceDuplicate: Bool = false) {
         do {
-            if try store.nameExists(mode: mode, name: draft.name), !forceDuplicate {
-                message = "같은 이름의 정상 기록이 있습니다. 확인 후 다시 저장해 주세요."
+            let matches = try store.activeEntriesNamed(mode: mode, name: draft.name)
+            if !matches.isEmpty, !forceDuplicate {
+                duplicateMatches = matches
+                message = "같은 이름의 정상 기록이 있습니다. 저장 방식을 선택해 주세요."
                 return
             }
             _ = try store.createEntry(draft, mode: mode)
             draft = EntryDraft(envelopeNo: try store.nextEnvelopeNo(mode: mode))
+            duplicateMatches = []
             refresh()
         } catch {
             message = error.localizedDescription
@@ -80,11 +85,32 @@ final class AppState: ObservableObject {
 
     func search(filters: EntryFilters) {
         do {
-            currentSearchFilters = filters
+            searchFilters = filters
             searchResults = try store.findEntries(filters: filters, mode: mode)
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    func filterDuplicateName(_ name: String) {
+        var filters = EntryFilters()
+        filters.name = name
+        filters.exactName = true
+        filters.status = .active
+        search(filters: filters)
+    }
+
+    func updateDuplicateMatches() {
+        do {
+            duplicateMatches = try store.activeEntriesNamed(mode: mode, name: draft.name)
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func cancelDuplicateReview() {
+        draft.name = ""
+        duplicateMatches = []
     }
 
     func switchMode(_ newMode: LedgerMode) {

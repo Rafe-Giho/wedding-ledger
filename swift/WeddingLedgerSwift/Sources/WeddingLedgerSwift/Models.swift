@@ -67,8 +67,9 @@ struct EntryDraft {
     var amount: Int { parseAmount(amountText) }
 }
 
-struct EntryFilters {
+struct EntryFilters: Equatable {
     var name = ""
+    var exactName = false
     var groupName = ""
     var minAmount = ""
     var maxAmount = ""

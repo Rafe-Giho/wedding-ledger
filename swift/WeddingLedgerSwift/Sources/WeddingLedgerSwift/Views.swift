@@ -209,7 +209,7 @@ struct WorkspaceContent: View {
         case .search:
             SearchView(layout: layout, availableHeight: availableHeight)
         case .summary:
-            SummaryView(layout: layout, availableHeight: availableHeight)
+            SummaryView(section: $section, layout: layout, availableHeight: availableHeight)
         case .settings:
             SettingsView(layout: layout)
         }
@@ -472,6 +472,9 @@ struct EntryFormView: View {
                     TextField("이름을 입력하세요", text: $state.draft.name)
                         .textFieldStyle(.plain)
                         .focused($nameFocused)
+                        .onChange(of: state.draft.name) { _, _ in
+                            state.updateDuplicateMatches()
+                        }
                 }
                 AdaptivePair(stacked: compact) {
                     FieldLabel("금액") {
@@ -518,20 +521,93 @@ struct EntryFormView: View {
                         .frame(minHeight: 52, maxHeight: fillsHeight ? .infinity : 52)
                         .scrollContentBackground(.hidden)
                 }
-                Button {
-                    state.saveEntry()
-                    nameFocused = true
-                } label: {
-                    Text("저장")
-                        .font(.system(size: 20, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .foregroundStyle(AppColors.window)
+                if state.duplicateMatches.isEmpty {
+                    Button {
+                        state.saveEntry()
+                        nameFocused = true
+                    } label: {
+                        Text("저장")
+                            .font(.system(size: 20, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .foregroundStyle(AppColors.window)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    DuplicateNameReviewCard(matches: state.duplicateMatches) {
+                        state.saveEntry(forceDuplicate: true)
+                        nameFocused = true
+                    } cancel: {
+                        state.cancelDuplicateReview()
+                        nameFocused = true
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
+    }
+}
+
+struct DuplicateNameReviewCard: View {
+    let matches: [LedgerEntry]
+    let saveDuplicate: () -> Void
+    let cancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("같은 이름의 정상 기록이 있습니다.")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppColors.text)
+            Text("기존 기록을 확인한 뒤 새 동명이인으로 저장하거나 취소할 수 있습니다.")
+                .font(.footnote)
+                .foregroundStyle(AppColors.muted)
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(matches) { entry in
+                        DuplicateEntryPreviewRow(entry: entry)
+                    }
+                }
+            }
+            .frame(maxHeight: 190)
+            .scrollIndicators(.visible)
+            HStack(spacing: 10) {
+                PillButton("취소하고 확인", outlined: true, action: cancel)
+                PillButton("새 동명이인으로 저장", action: saveDuplicate)
+            }
+        }
+        .padding(16)
+        .background(AppColors.goldSoft.opacity(0.72), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.gold.opacity(0.55), lineWidth: 1))
+    }
+}
+
+struct DuplicateEntryPreviewRow: View {
+    let entry: LedgerEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("봉투 #\(entry.envelopeNo)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppColors.gold)
+                Text(entry.name)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.text)
+                Spacer()
+                Text(entry.createdAt)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.muted)
+            }
+            Text("모임 \(entry.groupName) · 관계 \(entry.relationship.isEmpty ? "-" : entry.relationship)")
+                .font(.caption)
+                .foregroundStyle(AppColors.muted)
+            Text("금액 \(formatWon(entry.amount)) · 식권 \(entry.mealTicketCount)매")
+                .font(.caption)
+                .foregroundStyle(AppColors.text)
+        }
+        .padding(12)
+        .background(AppColors.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppColors.lineSoft, lineWidth: 1))
     }
 }
 
@@ -610,7 +686,13 @@ struct SearchView: View {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.text)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: layout == .compact ? 150 : 180), spacing: 12)], spacing: 12) {
-                    SoftTextField("이름", text: $filters.name)
+                    SoftTextField("이름", text: Binding(
+                        get: { filters.name },
+                        set: {
+                            filters.name = $0
+                            filters.exactName = false
+                        }
+                    ))
                     SoftTextField("모임", text: $filters.groupName)
                     SoftTextField("최소 금액", text: $filters.minAmount)
                         .onChange(of: filters.minAmount) { _, value in filters.minAmount = formatFilterAmount(value) }
@@ -638,12 +720,22 @@ struct SearchView: View {
                         .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
                         .foregroundStyle(AppColors.text)
                 }
+                DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
+                    state.filterDuplicateName(duplicate.name)
+                    filters = state.searchFilters
+                }
                 EntryTable(entries: state.searchResults, compact: layout == .compact)
                     .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
         .frame(height: layout == .compact ? nil : availableHeight)
+        .onAppear {
+            filters = state.searchFilters
+        }
+        .onChange(of: state.searchFilters) { _, value in
+            filters = value
+        }
     }
 
     private func formatFilterAmount(_ value: String) -> String {
@@ -654,6 +746,7 @@ struct SearchView: View {
 
 struct SummaryView: View {
     @EnvironmentObject private var state: AppState
+    @Binding var section: SectionKey
     let layout: ResponsiveLayout
     let availableHeight: CGFloat
 
@@ -671,7 +764,11 @@ struct SummaryView: View {
                     SummaryTile("현금 합계", formatWon(state.summary.paymentTotals[.cash] ?? 0))
                     SummaryTile("계좌 합계", formatWon(state.summary.paymentTotals[.transfer] ?? 0))
                     SummaryTile("누락 봉투", state.summary.envelopeGaps.isEmpty ? "없음" : state.summary.envelopeGaps.map(String.init).joined(separator: ", "))
-                    SummaryTile("동명이인", state.summary.duplicateNames.isEmpty ? "없음" : state.summary.duplicateNames.map(\.name).joined(separator: ", "))
+                    SummaryTile("동명이인", duplicateSummaryText(state.summary.duplicateNames))
+                }
+                DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
+                    state.filterDuplicateName(duplicate.name)
+                    section = .search
                 }
                 Text("모임별 합계")
                     .font(.headline)
@@ -689,6 +786,43 @@ struct SummaryView: View {
         }
         .frame(height: layout == .compact ? nil : availableHeight)
     }
+}
+
+struct DuplicateNameFilterRow: View {
+    let duplicates: [DuplicateName]
+    let select: (DuplicateName) -> Void
+
+    var body: some View {
+        if !duplicates.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("동명이인 바로 확인")
+                    .font(.headline)
+                    .foregroundStyle(AppColors.text)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
+                    ForEach(duplicates) { duplicate in
+                        Button {
+                            select(duplicate)
+                        } label: {
+                            Text("\(duplicate.name) \(duplicate.count)명")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.text)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 38)
+                                .background(AppColors.goldSoft, in: Capsule())
+                                .overlay(Capsule().stroke(AppColors.gold.opacity(0.55), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private func duplicateSummaryText(_ duplicates: [DuplicateName]) -> String {
+    guard !duplicates.isEmpty else { return "없음" }
+    let names = duplicates.prefix(2).map { "\($0.name) \($0.count)명" }.joined(separator: ", ")
+    return duplicates.count > 2 ? "\(names) 외 \(duplicates.count - 2)건" : names
 }
 
 struct SettingsView: View {
