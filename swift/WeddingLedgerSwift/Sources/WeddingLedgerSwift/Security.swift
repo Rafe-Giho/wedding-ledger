@@ -106,7 +106,20 @@ func verifySecret(_ secret: String, salt: String, expectedHash: String, iteratio
     guard let actual = try? hashSecret(secret, salt: salt, iterations: iterations) else {
         return false
     }
-    return actual == expectedHash
+    return constantTimeEquals(actual, expectedHash)
+}
+
+func constantTimeEquals(_ left: String, _ right: String) -> Bool {
+    let leftData = Data(left.utf8)
+    let rightData = Data(right.utf8)
+    let maxCount = max(leftData.count, rightData.count)
+    var difference = leftData.count ^ rightData.count
+    for index in 0..<maxCount {
+        let leftByte = index < leftData.count ? leftData[index] : 0
+        let rightByte = index < rightData.count ? rightData[index] : 0
+        difference |= Int(leftByte ^ rightByte)
+    }
+    return difference == 0
 }
 
 func generateRecoveryKey() throws -> String {
