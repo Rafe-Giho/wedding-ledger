@@ -17,6 +17,7 @@ final class AppState: ObservableObject {
     @Published var recoveryKeyToShow: String?
 
     let store: LedgerStore
+    private var currentSearchFilters = EntryFilters()
 
     init(store: LedgerStore) {
         self.store = store
@@ -33,9 +34,7 @@ final class AppState: ObservableObject {
             relationships = try store.recentRelationships()
             recentEntries = try store.lastEntries(mode: mode, limit: 8)
             summary = try store.summary(mode: mode)
-            if searchResults.isEmpty {
-                searchResults = try store.findEntries(mode: mode)
-            }
+            searchResults = try store.findEntries(filters: currentSearchFilters, mode: mode)
         } catch {
             message = error.localizedDescription
         }
@@ -81,6 +80,7 @@ final class AppState: ObservableObject {
 
     func search(filters: EntryFilters) {
         do {
+            currentSearchFilters = filters
             searchResults = try store.findEntries(filters: filters, mode: mode)
         } catch {
             message = error.localizedDescription
