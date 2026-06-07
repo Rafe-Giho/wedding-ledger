@@ -21,12 +21,19 @@ enum AppColors {
 
 struct Card<Content: View>: View {
     var padding: CGFloat = 30
+    var fillsAvailableSpace = false
     @ViewBuilder let content: Content
 
+    @ViewBuilder
     var body: some View {
-        content
+        let sizedContent = content
             .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(
+                maxWidth: fillsAvailableSpace ? .infinity : nil,
+                maxHeight: fillsAvailableSpace ? .infinity : nil,
+                alignment: .topLeading
+            )
+        sizedContent
             .background(AppColors.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)

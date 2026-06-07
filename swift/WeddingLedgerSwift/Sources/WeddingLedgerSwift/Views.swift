@@ -147,22 +147,32 @@ struct WorkspaceContent: View {
     let layout: ResponsiveLayout
 
     var body: some View {
-        ScrollView {
-            content
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.bottom, layout.contentPadding)
+        GeometryReader { proxy in
+            let contentHeight = max(0, proxy.size.height - layout.contentPadding)
+            if section == .settings || layout == .compact {
+                ScrollView {
+                    content(availableHeight: contentHeight)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.bottom, layout.contentPadding)
+                }
+            } else {
+                content(availableHeight: contentHeight)
+                    .frame(height: contentHeight)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.bottom, layout.contentPadding)
+            }
         }
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(availableHeight: CGFloat) -> some View {
         switch section {
         case .entry:
-            EntryDashboardView(section: $section, layout: layout)
+            EntryDashboardView(section: $section, layout: layout, availableHeight: availableHeight)
         case .search:
-            SearchView(layout: layout)
+            SearchView(layout: layout, availableHeight: availableHeight)
         case .summary:
-            SummaryView(layout: layout)
+            SummaryView(layout: layout, availableHeight: availableHeight)
         case .settings:
             SettingsView(layout: layout)
         }
@@ -342,26 +352,35 @@ struct ThemePreferenceControl: View {
 struct EntryDashboardView: View {
     @Binding var section: SectionKey
     let layout: ResponsiveLayout
+    let availableHeight: CGFloat
 
     var body: some View {
-        if layout.stacksEntry {
+        if layout == .compact {
             VStack(spacing: 18) {
-                EntryFormView(compact: layout.stacksPairs)
-                RecentEntriesCard(listHeight: layout.recentEntriesHeight) { section = .search }
+                EntryFormView(compact: true)
+                RecentEntriesCard(listHeight: layout.recentEntriesHeight, fillsHeight: false) { section = .search }
                 SummaryCardsRow()
                 ThanksCard()
             }
+        } else if layout.stacksEntry {
+            let cardHeight = max(280, (availableHeight - 18) / 2)
+            VStack(spacing: 18) {
+                EntryFormView(compact: false, fillsHeight: true)
+                    .frame(height: cardHeight)
+                RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
+                    .frame(height: cardHeight)
+            }
+            .frame(height: availableHeight)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         } else {
             HStack(alignment: .top, spacing: 18) {
-                EntryFormView(compact: false)
+                EntryFormView(compact: false, fillsHeight: true)
                     .frame(minWidth: layout.entryFormWidth, maxWidth: 640)
-                VStack(spacing: 18) {
-                    RecentEntriesCard(listHeight: layout.recentEntriesHeight) { section = .search }
-                    SummaryCardsRow()
-                    ThanksCard()
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxHeight: .infinity)
+                RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(height: availableHeight)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
@@ -371,9 +390,10 @@ struct EntryFormView: View {
     @EnvironmentObject private var state: AppState
     @FocusState private var nameFocused: Bool
     let compact: Bool
+    var fillsHeight = false
 
     var body: some View {
-        Card(padding: compact ? 18 : 20) {
+        Card(padding: compact ? 18 : 20, fillsAvailableSpace: fillsHeight) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("새로운 축의 입력")
                     .font(.system(size: 22, weight: .bold))
@@ -437,24 +457,20 @@ struct EntryFormView: View {
                     Text("금액 빠른 선택")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.text)
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 10) {
-                            ForEach(defaultQuickAmounts, id: \.self) { amount in
-                                PillButton(formatNumber(amount)) {
-                                    state.draft.amountText = formatNumber(amount)
-                                }
-                            }
-                            PillButton("+1만원", outlined: true) {
-                                state.draft.amountText = formatNumber(state.draft.amount + 10_000)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                        ForEach(defaultQuickAmounts, id: \.self) { amount in
+                            PillButton(formatNumber(amount)) {
+                                state.draft.amountText = formatNumber(amount)
                             }
                         }
-                        .padding(.vertical, 1)
+                        PillButton("+1만원", outlined: true) {
+                            state.draft.amountText = formatNumber(state.draft.amount + 10_000)
+                        }
                     }
-                    .scrollIndicators(.hidden)
                 }
                 FieldLabel("메모 (선택)") {
                     TextEditor(text: $state.draft.memo)
-                        .frame(height: 52)
+                        .frame(minHeight: 52, maxHeight: fillsHeight ? .infinity : 52)
                         .scrollContentBackground(.hidden)
                 }
                 Button {
@@ -476,11 +492,12 @@ struct EntryFormView: View {
 
 struct RecentEntriesCard: View {
     @EnvironmentObject private var state: AppState
-    let listHeight: CGFloat
+    let listHeight: CGFloat?
+    let fillsHeight: Bool
     let showAll: () -> Void
 
     var body: some View {
-        Card(padding: 22) {
+        Card(padding: 22, fillsAvailableSpace: fillsHeight) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("최근 입력 내역")
@@ -495,8 +512,10 @@ struct RecentEntriesCard: View {
                     EntryTable(entries: state.recentEntries, compact: true)
                 }
                 .frame(height: listHeight)
+                .frame(maxHeight: fillsHeight ? .infinity : nil)
                 .scrollIndicators(.visible)
             }
+            .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         }
     }
 }
@@ -537,9 +556,10 @@ struct SearchView: View {
     @EnvironmentObject private var state: AppState
     @State private var filters = EntryFilters()
     let layout: ResponsiveLayout
+    let availableHeight: CGFloat
 
     var body: some View {
-        Card(padding: layout.cardPadding) {
+        Card(padding: layout.cardPadding, fillsAvailableSpace: layout != .compact) {
             VStack(alignment: .leading, spacing: 22) {
                 Text("검색")
                     .font(.system(size: 24, weight: .bold))
@@ -574,8 +594,11 @@ struct SearchView: View {
                         .foregroundStyle(AppColors.text)
                 }
                 EntryTable(entries: state.searchResults, compact: layout == .compact)
+                    .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
             }
+            .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
+        .frame(height: layout == .compact ? nil : availableHeight)
     }
 
     private func formatFilterAmount(_ value: String) -> String {
@@ -587,9 +610,10 @@ struct SearchView: View {
 struct SummaryView: View {
     @EnvironmentObject private var state: AppState
     let layout: ResponsiveLayout
+    let availableHeight: CGFloat
 
     var body: some View {
-        Card(padding: layout.cardPadding) {
+        Card(padding: layout.cardPadding, fillsAvailableSpace: layout != .compact) {
             VStack(alignment: .leading, spacing: 22) {
                 Text("정산")
                     .font(.system(size: 24, weight: .bold))
@@ -614,8 +638,11 @@ struct SummaryView: View {
                     TableColumn("식권") { Text("\($0.totalTickets)") }
                 }
                 .frame(minHeight: 260)
+                .frame(maxHeight: layout == .compact ? nil : .infinity)
             }
+            .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
+        .frame(height: layout == .compact ? nil : availableHeight)
     }
 }
 
