@@ -1,12 +1,25 @@
 import unittest
 
-from wedding_ledger.app import is_digits_or_empty, parse_amount, parse_required_int, validate_password
+from wedding_ledger.app import (
+    format_amount_input,
+    format_number,
+    is_amount_text,
+    is_digits_or_empty,
+    parse_amount,
+    parse_required_int,
+    validate_password,
+)
 
 
 class AppHelperTest(unittest.TestCase):
     def test_parse_amount_accepts_commas_and_won_text(self) -> None:
         self.assertEqual(parse_amount("100,000원"), 100000)
         self.assertEqual(parse_amount(" 50,000 "), 50000)
+
+    def test_amount_display_uses_commas_without_changing_data(self) -> None:
+        self.assertEqual(format_number(100000), "100,000")
+        self.assertEqual(format_amount_input("100000원"), "100,000")
+        self.assertEqual(parse_amount(format_amount_input("100000")), 100000)
 
     def test_parse_required_int_rejects_invalid_text(self) -> None:
         with self.assertRaisesRegex(ValueError, "식권 수"):
@@ -21,6 +34,12 @@ class AppHelperTest(unittest.TestCase):
         self.assertTrue(is_digits_or_empty("100000"))
         self.assertFalse(is_digits_or_empty("100,000"))
         self.assertFalse(is_digits_or_empty("십만원"))
+
+    def test_amount_validator_allows_digits_and_commas(self) -> None:
+        self.assertTrue(is_amount_text(""))
+        self.assertTrue(is_amount_text("100000"))
+        self.assertTrue(is_amount_text("100,000"))
+        self.assertFalse(is_amount_text("십만원"))
 
     def test_validate_password_requires_min_length(self) -> None:
         validate_password("abcd")

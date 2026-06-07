@@ -48,13 +48,29 @@ def format_won(value: int | str | None) -> str:
         return "0원"
 
 
+def format_number(value: int | str | None) -> str:
+    try:
+        return f"{int(value or 0):,}"
+    except ValueError:
+        return "0"
+
+
 def parse_amount(value: str) -> int:
     digits = re.sub(r"[^0-9]", "", value or "")
     return int(digits or 0)
 
 
+def format_amount_input(value: str) -> str:
+    amount = parse_amount(value)
+    return format_number(amount) if amount else ""
+
+
 def is_digits_or_empty(value: str) -> bool:
     return value == "" or value.isdigit()
+
+
+def is_amount_text(value: str) -> bool:
+    return re.fullmatch(r"[0-9,]*", value or "") is not None
 
 
 def validate_password(value: str) -> None:
@@ -195,6 +211,7 @@ class WeddingLedgerApp(tk.Tk):
         self.configure(bg=BG)
         self._configure_style()
         self.numeric_vcmd = (self.register(is_digits_or_empty), "%P")
+        self.amount_vcmd = (self.register(is_amount_text), "%P")
         self.container = ttk.Frame(self, padding=18)
         self.container.pack(fill="both", expand=True)
         self.bind_all("<Key>", self._mark_activity)
@@ -278,6 +295,7 @@ class WeddingLedgerApp(tk.Tk):
         variable: tk.StringVar,
         width: int = 30,
         validate_digits: bool = False,
+        validate_amount: bool = False,
         show: str | None = None,
     ) -> tk.Entry:
         entry = tk.Entry(
@@ -299,7 +317,18 @@ class WeddingLedgerApp(tk.Tk):
             entry.configure(show=show)
         if validate_digits:
             entry.configure(validate="key", validatecommand=self.numeric_vcmd)
+        if validate_amount:
+            entry.configure(validate="key", validatecommand=self.amount_vcmd)
         return entry
+
+    def _format_amount_var(self, variable: tk.StringVar) -> None:
+        variable.set(format_amount_input(variable.get()))
+
+    def _set_amount_var(self, variable: tk.StringVar, amount: int) -> None:
+        variable.set(format_number(amount))
+
+    def _add_amount(self, variable: tk.StringVar, amount: int) -> None:
+        self._set_amount_var(variable, parse_amount(variable.get()) + amount)
 
     def _clear(self) -> None:
         for child in self.container.winfo_children():
@@ -522,11 +551,13 @@ class WeddingLedgerApp(tk.Tk):
         self.relationship_select = SuggestionEntry(form, self.relationship_var, width=24)
         self.relationship_select.grid(row=4, column=1, columnspan=2, sticky="ew")
 
-        self.amount_entry = self._labeled_entry(form, "금액 *", self.amount_var, 5, validate_digits=True)
+        self.amount_entry = self._labeled_entry(form, "금액 *", self.amount_var, 5, validate_amount=True)
+        self.amount_entry.bind("<FocusOut>", lambda _event: self._format_amount_var(self.amount_var))
         amount_frame = ttk.Frame(form)
         amount_frame.grid(row=6, column=1, columnspan=2, sticky="w", pady=(0, 8))
         for index, amount in enumerate(DEFAULT_QUICK_AMOUNTS):
-            ttk.Button(amount_frame, text=format_won(amount).replace("원", ""), command=lambda value=amount: self.amount_var.set(str(value))).grid(row=index // 4, column=index % 4, padx=3, pady=3)
+            ttk.Button(amount_frame, text=format_number(amount), command=lambda value=amount: self._set_amount_var(self.amount_var, value)).grid(row=index // 4, column=index % 4, padx=3, pady=3)
+        ttk.Button(amount_frame, text="+1만원", command=lambda: self._add_amount(self.amount_var, 10_000)).grid(row=2, column=0, columnspan=2, sticky="ew", padx=3, pady=3)
 
         ttk.Label(form, text="식권 수 *").grid(row=7, column=0, sticky="e", padx=8, pady=7)
         self.ticket_spinbox = ttk.Spinbox(form, textvariable=self.ticket_var, from_=0, to=20, width=8)
@@ -570,9 +601,10 @@ class WeddingLedgerApp(tk.Tk):
         variable: tk.StringVar,
         row_index: int,
         validate_digits: bool = False,
+        validate_amount: bool = False,
     ) -> tk.Entry:
         ttk.Label(parent, text=label).grid(row=row_index, column=0, sticky="e", padx=8, pady=7)
-        entry = self._make_entry(parent, variable, width=30, validate_digits=validate_digits)
+        entry = self._make_entry(parent, variable, width=30, validate_digits=validate_digits, validate_amount=validate_amount)
         entry.grid(row=row_index, column=1, columnspan=2, sticky="w")
         return entry
 
@@ -654,9 +686,12 @@ class WeddingLedgerApp(tk.Tk):
                 filters,
                 variable,
                 width=12,
-                validate_digits=label in {"최소금액", "최대금액", "식권수"},
+                validate_digits=label == "식권수",
+                validate_amount=label in {"최소금액", "최대금액"},
             )
             entry.grid(row=0, column=column + 1, padx=(0, 8))
+            if label in {"최소금액", "최대금액"}:
+                entry.bind("<FocusOut>", lambda _event, var=variable: self._format_amount_var(var))
             search_entries.append(entry)
         search_payment_combo = ttk.Combobox(filters, textvariable=self.search_payment_var, values=["전체", *PAYMENT_METHODS.values()], state="readonly", width=8)
         search_payment_combo.grid(row=1, column=1, sticky="w", pady=8)
@@ -808,7 +843,7 @@ class WeddingLedgerApp(tk.Tk):
             "name": tk.StringVar(value=str(entry["name"])),
             "group_name": tk.StringVar(value=str(entry["group_name"])),
             "relationship": tk.StringVar(value=str(entry["relationship"])),
-            "amount": tk.StringVar(value=str(entry["amount"])),
+            "amount": tk.StringVar(value=format_number(entry["amount"])),
             "meal_ticket_count": tk.StringVar(value=str(entry["meal_ticket_count"])),
             "payment_method": tk.StringVar(value=PAYMENT_METHODS.get(str(entry["payment_method"]), "현금")),
             "memo": tk.StringVar(value=str(entry["memo"])),
@@ -848,9 +883,12 @@ class WeddingLedgerApp(tk.Tk):
                     top,
                     vars_map[key],
                     width=34,
-                    validate_digits=key in {"envelope_no", "amount", "meal_ticket_count"},
+                    validate_digits=key in {"envelope_no", "meal_ticket_count"},
+                    validate_amount=key == "amount",
                 )
                 widget.grid(row=idx, column=1, sticky="w")
+                if key == "amount":
+                    widget.bind("<FocusOut>", lambda _event, var=vars_map[key]: self._format_amount_var(var))
                 edit_widgets.append(widget)
 
         def save() -> None:
@@ -956,8 +994,9 @@ class WeddingLedgerApp(tk.Tk):
         actual_envelope_entry = self._make_entry(compare, self.actual_envelope_var, width=10, validate_digits=True)
         actual_envelope_entry.pack(side="left", padx=6)
         ttk.Label(compare, text="실제 현금").pack(side="left", padx=(12, 0))
-        actual_cash_entry = self._make_entry(compare, self.actual_cash_var, width=16, validate_digits=True)
+        actual_cash_entry = self._make_entry(compare, self.actual_cash_var, width=16, validate_amount=True)
         actual_cash_entry.pack(side="left", padx=6)
+        actual_cash_entry.bind("<FocusOut>", lambda _event: self._format_amount_var(self.actual_cash_var))
         ttk.Button(compare, text="검증", command=self.compare_actuals).pack(side="left", padx=8)
         ttk.Label(compare, textvariable=self.compare_result_var, style="Danger.TLabel").pack(side="left", padx=10)
         self._bind_safe_focus_chain([actual_envelope_entry, actual_cash_entry], self.compare_actuals)
