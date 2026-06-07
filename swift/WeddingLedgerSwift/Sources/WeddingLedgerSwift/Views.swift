@@ -363,22 +363,30 @@ struct EntryDashboardView: View {
                 ThanksCard()
             }
         } else if layout.stacksEntry {
-            let cardHeight = max(280, (availableHeight - 18) / 2)
-            VStack(spacing: 18) {
-                EntryFormView(compact: false, fillsHeight: true)
-                    .frame(height: cardHeight)
-                RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
-                    .frame(height: cardHeight)
+            ScrollView {
+                VStack(spacing: 18) {
+                    EntryFormView(compact: false)
+                    RecentEntriesCard(listHeight: layout.recentEntriesHeight, fillsHeight: false) { section = .search }
+                    SummaryCardsRow()
+                    ThanksCard()
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(height: availableHeight)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .scrollIndicators(.visible)
         } else {
             HStack(alignment: .top, spacing: 18) {
                 EntryFormView(compact: false, fillsHeight: true)
                     .frame(minWidth: layout.entryFormWidth, maxWidth: 640)
                     .frame(maxHeight: .infinity)
-                RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 18) {
+                    RecentEntriesCard(listHeight: nil, fillsHeight: true) { section = .search }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    SummaryCardsRow()
+                    ThanksCard()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(height: availableHeight)
             .frame(maxWidth: .infinity, alignment: .topLeading)
