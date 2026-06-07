@@ -19,7 +19,7 @@ struct WeddingLedgerSwiftApp: App {
             RootView()
                 .environmentObject(state)
                 .preferredColorScheme(state.themePreference.colorScheme)
-                .frame(minWidth: 1180, minHeight: 760)
+                .frame(minWidth: 860, minHeight: 640)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

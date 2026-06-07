@@ -29,6 +29,30 @@ enum SectionKey: String, CaseIterable, Identifiable {
     }
 }
 
+enum ResponsiveLayout {
+    case expanded
+    case medium
+    case compact
+
+    init(width: CGFloat) {
+        if width < 920 {
+            self = .compact
+        } else if width < 1240 {
+            self = .medium
+        } else {
+            self = .expanded
+        }
+    }
+
+    var showsSidebar: Bool { self != .compact }
+    var stacksEntry: Bool { self != .expanded }
+    var stacksPairs: Bool { self == .compact }
+    var sidebarWidth: CGFloat { self == .medium ? 220 : 266 }
+    var contentPadding: CGFloat { self == .compact ? 18 : 30 }
+    var entryFormWidth: CGFloat { self == .medium ? 460 : 496 }
+    var cardPadding: CGFloat { self == .compact ? 22 : 30 }
+}
+
 struct RootView: View {
     @EnvironmentObject private var state: AppState
     @State private var section: SectionKey = .entry
@@ -62,31 +86,74 @@ struct RecoveryKeySheet: Identifiable {
 }
 
 struct ShellView: View {
-    @EnvironmentObject private var state: AppState
     @Binding var section: SectionKey
 
     var body: some View {
-        HStack(spacing: 0) {
-            SidebarView(section: $section)
-            VStack(spacing: 22) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(section.label)
-                            .font(.system(size: 30, weight: .bold))
-                        Text("빠르게 입력하고 바로 확인할 수 있게 정리했습니다.")
-                            .foregroundStyle(.secondary)
+        GeometryReader { proxy in
+            let layout = ResponsiveLayout(width: proxy.size.width)
+            ZStack(alignment: .topLeading) {
+                WindowBackground()
+                TrafficDotsView()
+                    .padding(.top, 24)
+                    .padding(.leading, 26)
+                    .opacity(layout.showsSidebar ? 1 : 0)
+                if layout.showsSidebar {
+                    HStack(spacing: 0) {
+                        SidebarView(section: $section, width: layout.sidebarWidth)
+                        WorkspaceView(section: $section, layout: layout)
                     }
-                    Spacer()
-                    Text("\(state.mode.label) 모드")
-                        .font(.headline)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.thinMaterial, in: Capsule())
+                } else {
+                    VStack(spacing: 0) {
+                        CompactHeaderView(section: $section)
+                        WorkspaceContent(section: $section, layout: layout)
+                    }
                 }
-                content
             }
-            .padding(30)
-            .background(AppColors.background)
+        }
+        .background(AppColors.background)
+    }
+}
+
+struct WindowBackground: View {
+    var body: some View {
+        ZStack {
+            AppColors.window
+            RadialGradient(
+                colors: [Color.white.opacity(0.22), .clear],
+                center: .init(x: 0.30, y: 0.18),
+                startRadius: 0,
+                endRadius: 430
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+struct WorkspaceView: View {
+    @Binding var section: SectionKey
+    let layout: ResponsiveLayout
+
+    var body: some View {
+        VStack(spacing: 26) {
+            TopBarView(compact: false)
+            WorkspaceContent(section: $section, layout: layout)
+        }
+        .padding(.top, 34)
+        .padding(.horizontal, layout.contentPadding)
+        .padding(.bottom, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct WorkspaceContent: View {
+    @Binding var section: SectionKey
+    let layout: ResponsiveLayout
+
+    var body: some View {
+        ScrollView {
+            content
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.bottom, layout.contentPadding)
         }
     }
 
@@ -94,13 +161,74 @@ struct ShellView: View {
     private var content: some View {
         switch section {
         case .entry:
-            EntryDashboardView()
+            EntryDashboardView(section: $section, layout: layout)
         case .search:
-            SearchView()
+            SearchView(layout: layout)
         case .summary:
-            SummaryView()
+            SummaryView(layout: layout)
         case .settings:
-            SettingsView()
+            SettingsView(layout: layout)
+        }
+    }
+}
+
+struct TopBarView: View {
+    @EnvironmentObject private var state: AppState
+    let compact: Bool
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Spacer()
+            ModePill(title: "\(state.mode.label) 모드")
+            ThemePreferenceControl(compact: compact)
+        }
+        .frame(minHeight: 36)
+    }
+}
+
+struct CompactHeaderView: View {
+    @Binding var section: SectionKey
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack(alignment: .center, spacing: 16) {
+                BrandLockup(horizontal: true)
+                Spacer()
+            }
+            TopBarView(compact: true)
+            TopNavigationView(section: $section)
+        }
+        .padding(.top, 18)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 16)
+        .background(AppColors.sidebar)
+        .overlay(Rectangle().fill(AppColors.lineSoft).frame(height: 1), alignment: .bottom)
+    }
+}
+
+struct BrandLockup: View {
+    let horizontal: Bool
+
+    var body: some View {
+        if horizontal {
+            HStack(spacing: 12) {
+                Text("⌘")
+                    .font(.system(size: 28))
+                    .foregroundStyle(AppColors.gold)
+                Text(appTitle)
+                    .font(.custom("AppleMyungjo", size: 27))
+                    .foregroundStyle(AppColors.text)
+            }
+        } else {
+            VStack(spacing: 8) {
+                Text("⌘")
+                    .font(.system(size: 32))
+                    .foregroundStyle(AppColors.gold)
+                Text(appTitle)
+                    .font(.custom("AppleMyungjo", size: 31))
+                    .foregroundStyle(AppColors.text)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 }
@@ -108,62 +236,130 @@ struct ShellView: View {
 struct SidebarView: View {
     @EnvironmentObject private var state: AppState
     @Binding var section: SectionKey
+    let width: CGFloat
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("⌘")
-                .font(.system(size: 32))
-                .foregroundStyle(AppColors.gold)
-                .padding(.top, 52)
-            Text(appTitle)
-                .font(.custom("AppleMyungjo", size: 31))
-                .padding(.top, 10)
+            BrandLockup(horizontal: false)
+                .padding(.top, 86)
                 .padding(.bottom, 54)
             VStack(spacing: 18) {
                 ForEach(SectionKey.allCases) { item in
-                    Button {
+                    NavigationButton(item: item, isActive: section == item) {
                         section = item
-                    } label: {
-                        HStack(spacing: 18) {
-                            Image(systemName: item.symbol)
-                                .frame(width: 42, height: 42)
-                                .background(section == item ? AppColors.gold : .clear, in: Circle())
-                                .foregroundStyle(section == item ? .white : .secondary)
-                            Text(item.label)
-                                .font(.system(size: 21, weight: .medium))
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .frame(height: 68)
-                        .background(section == item ? AppColors.sidebarActive : .clear, in: RoundedRectangle(cornerRadius: 20))
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, width == 220 ? 18 : 28)
             Spacer()
             FloralLineArt()
                 .stroke(AppColors.gold.opacity(0.34), lineWidth: 1.2)
-                .frame(width: 190, height: 260)
+                .frame(width: width == 220 ? 170 : 220, height: 300)
+                .padding(.bottom, 18)
             Button("잠금") {
                 state.isUnlocked = false
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .foregroundStyle(AppColors.text)
+            .padding(.horizontal, 20)
+            .frame(width: 148, height: 44)
+            .background(AppColors.field, in: Capsule())
+            .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
             .padding(.bottom, 24)
         }
-        .frame(width: 266)
+        .frame(width: width)
         .background(AppColors.sidebar)
+        .overlay(Rectangle().fill(AppColors.lineSoft).frame(width: 1), alignment: .trailing)
+    }
+}
+
+struct TopNavigationView: View {
+    @Binding var section: SectionKey
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(SectionKey.allCases) { item in
+                Button {
+                    section = item
+                } label: {
+                    Label(item.label, systemImage: item.symbol)
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(section == item ? AppColors.sidebarActive : Color.clear, in: Capsule())
+                        .foregroundStyle(section == item ? AppColors.text : AppColors.muted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct NavigationButton: View {
+    let item: SectionKey
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 18) {
+                Image(systemName: item.symbol)
+                    .frame(width: 42, height: 42)
+                    .background(isActive ? AppColors.gold : Color.clear, in: Circle())
+                    .overlay(Circle().stroke(isActive ? AppColors.gold : AppColors.muted.opacity(0.65), lineWidth: 1))
+                    .foregroundStyle(isActive ? .white : AppColors.muted)
+                Text(item.label)
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(AppColors.text)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 68)
+            .background(isActive ? AppColors.sidebarActive : Color.clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ThemePreferenceControl: View {
+    @EnvironmentObject private var state: AppState
+    let compact: Bool
+
+    var body: some View {
+        Picker("화면 테마", selection: Binding(get: { state.themePreference }, set: { state.setTheme($0) })) {
+            ForEach(ThemePreference.allCases) { preference in
+                Text(compact ? preference.shortLabel : preference.label).tag(preference)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: compact ? 228 : 304)
     }
 }
 
 struct EntryDashboardView: View {
+    @Binding var section: SectionKey
+    let layout: ResponsiveLayout
+
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
-            EntryFormView()
-                .frame(width: 496)
+        if layout.stacksEntry {
             VStack(spacing: 18) {
-                RecentEntriesCard()
+                EntryFormView(compact: layout.stacksPairs)
+                RecentEntriesCard { section = .search }
                 SummaryCardsRow()
                 ThanksCard()
+            }
+        } else {
+            HStack(alignment: .top, spacing: 18) {
+                EntryFormView(compact: false)
+                    .frame(width: layout.entryFormWidth)
+                VStack(spacing: 18) {
+                    RecentEntriesCard { section = .search }
+                    SummaryCardsRow()
+                    ThanksCard()
+                }
             }
         }
     }
@@ -172,18 +368,21 @@ struct EntryDashboardView: View {
 struct EntryFormView: View {
     @EnvironmentObject private var state: AppState
     @FocusState private var nameFocused: Bool
+    let compact: Bool
 
     var body: some View {
-        Card {
+        Card(padding: compact ? 24 : 30) {
             VStack(alignment: .leading, spacing: 24) {
                 Text("새로운 축의 입력")
                     .font(.system(size: 24, weight: .bold))
-                HStack(spacing: 18) {
+                    .foregroundStyle(AppColors.text)
+                AdaptivePair(stacked: compact) {
                     FieldLabel("봉투번호") {
                         TextField("봉투번호", value: $state.draft.envelopeNo, format: .number)
                             .textFieldStyle(.plain)
                             .font(.system(size: 18, weight: .semibold))
                     }
+                } second: {
                     FieldLabel("입금방식") {
                         Picker("", selection: $state.draft.paymentMethod) {
                             ForEach(PaymentMethod.allCases) { method in
@@ -193,10 +392,11 @@ struct EntryFormView: View {
                         .labelsHidden()
                     }
                 }
-                HStack(spacing: 18) {
+                AdaptivePair(stacked: compact) {
                     FieldLabel("모임") {
                         SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
                     }
+                } second: {
                     FieldLabel("관계") {
                         SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
                     }
@@ -206,10 +406,10 @@ struct EntryFormView: View {
                         .textFieldStyle(.plain)
                         .focused($nameFocused)
                 }
-                HStack(spacing: 18) {
+                AdaptivePair(stacked: compact) {
                     FieldLabel("금액") {
                         HStack {
-                            Text("₩").foregroundStyle(.secondary)
+                            Text("₩").foregroundStyle(AppColors.muted)
                             TextField("금액을 입력하세요", text: $state.draft.amountText)
                                 .textFieldStyle(.plain)
                                 .onChange(of: state.draft.amountText) { _, value in
@@ -218,21 +418,24 @@ struct EntryFormView: View {
                                 }
                         }
                     }
+                } second: {
                     FieldLabel("식권") {
-                        HStack {
-                            Image(systemName: "fork.knife").foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
                             Button("-") { state.draft.mealTicketCount = max(0, state.draft.mealTicketCount - 1) }
                             Text("\(state.draft.mealTicketCount)")
-                                .frame(width: 26)
+                                .frame(width: 30)
                             Button("+") { state.draft.mealTicketCount += 1 }
                             Text("매")
                         }
+                        .buttonStyle(.borderless)
                     }
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     Text("금액 빠른 선택")
-                        .font(.headline)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppColors.text)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
                         ForEach(defaultQuickAmounts, id: \.self) { amount in
                             PillButton(formatNumber(amount)) {
                                 state.draft.amountText = formatNumber(amount)
@@ -256,8 +459,8 @@ struct EntryFormView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 60)
-                        .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18))
-                        .foregroundStyle(.white)
+                        .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .foregroundStyle(AppColors.window)
                 }
                 .buttonStyle(.plain)
             }
@@ -267,16 +470,19 @@ struct EntryFormView: View {
 
 struct RecentEntriesCard: View {
     @EnvironmentObject private var state: AppState
+    let showAll: () -> Void
 
     var body: some View {
-        Card {
+        Card(padding: 28) {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Text("최근 입력 내역")
                         .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(AppColors.text)
                     Spacer()
-                    Text("전체 보기 ›")
-                        .foregroundStyle(.secondary)
+                    Button("전체 보기 ›", action: showAll)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppColors.text)
                 }
                 EntryTable(entries: state.recentEntries, compact: true)
             }
@@ -288,7 +494,7 @@ struct SummaryCardsRow: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
-        HStack(spacing: 18) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 18)], spacing: 18) {
             StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign")
             StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: "사용 \(state.summary.totalTickets)매 ㅣ 남은 0매", symbol: "fork.knife")
             StatCard(
@@ -303,7 +509,7 @@ struct SummaryCardsRow: View {
 
 struct ThanksCard: View {
     var body: some View {
-        Card {
+        Card(padding: 24) {
             HStack {
                 Text("따뜻한 마음에 감사드립니다.")
                     .font(.custom("AppleMyungjo", size: 22))
@@ -318,36 +524,44 @@ struct ThanksCard: View {
 struct SearchView: View {
     @EnvironmentObject private var state: AppState
     @State private var filters = EntryFilters()
+    let layout: ResponsiveLayout
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 18) {
+        Card(padding: layout.cardPadding) {
+            VStack(alignment: .leading, spacing: 22) {
                 Text("검색")
                     .font(.system(size: 24, weight: .bold))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                    TextField("이름", text: $filters.name)
-                    TextField("모임", text: $filters.groupName)
-                    TextField("최소 금액", text: $filters.minAmount)
+                    .foregroundStyle(AppColors.text)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: layout == .compact ? 150 : 180), spacing: 12)], spacing: 12) {
+                    SoftTextField("이름", text: $filters.name)
+                    SoftTextField("모임", text: $filters.groupName)
+                    SoftTextField("최소 금액", text: $filters.minAmount)
                         .onChange(of: filters.minAmount) { _, value in filters.minAmount = formatFilterAmount(value) }
-                    TextField("최대 금액", text: $filters.maxAmount)
+                    SoftTextField("최대 금액", text: $filters.maxAmount)
                         .onChange(of: filters.maxAmount) { _, value in filters.maxAmount = formatFilterAmount(value) }
-                    TextField("식권수", text: $filters.ticketCount)
+                    SoftTextField("식권수", text: $filters.ticketCount)
                         .onChange(of: filters.ticketCount) { _, value in filters.ticketCount = value.filter(\.isNumber) }
                     Picker("입금방식", selection: Binding(get: { filters.paymentMethod }, set: { filters.paymentMethod = $0 })) {
-                        Text("전체").tag(PaymentMethod?.none)
+                        Text("방식 전체").tag(PaymentMethod?.none)
                         ForEach(PaymentMethod.allCases) { method in
                             Text(method.label).tag(Optional(method))
                         }
                     }
                     Picker("상태", selection: Binding(get: { filters.status }, set: { filters.status = $0 })) {
-                        Text("전체").tag(EntryStatus?.none)
+                        Text("상태 전체").tag(EntryStatus?.none)
                         ForEach(EntryStatus.allCases) { status in
                             Text(status.label).tag(Optional(status))
                         }
                     }
                     Button("검색") { state.search(filters: filters) }
+                        .buttonStyle(.plain)
+                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .background(AppColors.goldSoft, in: Capsule())
+                        .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
+                        .foregroundStyle(AppColors.text)
                 }
-                EntryTable(entries: state.searchResults, compact: false)
+                EntryTable(entries: state.searchResults, compact: layout == .compact)
             }
         }
     }
@@ -360,13 +574,15 @@ struct SearchView: View {
 
 struct SummaryView: View {
     @EnvironmentObject private var state: AppState
+    let layout: ResponsiveLayout
 
     var body: some View {
-        Card {
+        Card(padding: layout.cardPadding) {
             VStack(alignment: .leading, spacing: 22) {
                 Text("정산")
                     .font(.system(size: 24, weight: .bold))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 16) {
+                    .foregroundStyle(AppColors.text)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 16)], spacing: 16) {
                     SummaryTile("정상 기록", "\(state.summary.activeCount)건")
                     SummaryTile("취소 기록", "\(state.summary.voidCount)건")
                     SummaryTile("총 축의금", formatWon(state.summary.totalAmount))
@@ -378,12 +594,14 @@ struct SummaryView: View {
                 }
                 Text("모임별 합계")
                     .font(.headline)
+                    .foregroundStyle(AppColors.text)
                 Table(state.summary.groupTotals) {
                     TableColumn("모임", value: \.groupName)
                     TableColumn("건수") { Text("\($0.count)") }
                     TableColumn("총액") { Text(formatWon($0.totalAmount)).foregroundStyle(AppColors.gold) }
                     TableColumn("식권") { Text("\($0.totalTickets)") }
                 }
+                .frame(minHeight: 260)
             }
         }
     }
@@ -394,33 +612,43 @@ struct SettingsView: View {
     @State private var confirmAll = false
     @State private var confirmRecords = false
     @State private var confirmTest = false
+    let layout: ResponsiveLayout
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 20) {
+        Card(padding: layout.cardPadding) {
+            VStack(alignment: .leading, spacing: 22) {
                 Text("설정")
                     .font(.system(size: 24, weight: .bold))
-                Form {
-                    Picker("화면 테마", selection: Binding(get: { state.themePreference }, set: { state.setTheme($0) })) {
-                        ForEach(ThemePreference.allCases) { preference in
-                            Text(preference.label).tag(preference)
-                        }
-                    }
+                    .foregroundStyle(AppColors.text)
+                SettingsRow(title: "화면 테마") {
+                    ThemePreferenceControl(compact: layout == .compact)
+                }
+                SettingsRow(title: "현재 모드") {
                     Picker("현재 모드", selection: Binding(get: { state.mode }, set: { state.switchMode($0) })) {
                         ForEach(LedgerMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
-                    Text("데이터 위치: \(state.store.appDirectory.path)")
-                        .foregroundStyle(.secondary)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 180)
                 }
-                HStack {
-                    Button("엑셀 추출") { exportExcel() }
-                    Button("수동 백업 생성") { state.createBackup() }
-                    Button("백업 복원") { restoreBackup() }
-                    Button("테스트 데이터 초기화", role: .destructive) { confirmTest = true }
-                    Button("기록/목록 초기화", role: .destructive) { confirmRecords = true }
-                    Button("전체 초기화", role: .destructive) { confirmAll = true }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("데이터 위치")
+                        .font(.headline)
+                        .foregroundStyle(AppColors.text)
+                    Text(state.store.appDirectory.path)
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.muted)
+                        .textSelection(.enabled)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 12)], spacing: 12) {
+                    SettingsActionButton("엑셀 추출") { exportExcel() }
+                    SettingsActionButton("수동 백업 생성") { state.createBackup() }
+                    SettingsActionButton("백업 복원") { restoreBackup() }
+                    SettingsActionButton("테스트 데이터 초기화", destructive: true) { confirmTest = true }
+                    SettingsActionButton("기록/목록 초기화", destructive: true) { confirmRecords = true }
+                    SettingsActionButton("전체 초기화", destructive: true) { confirmAll = true }
                 }
             }
         }
@@ -467,8 +695,9 @@ struct AuthView: View {
         VStack(spacing: 18) {
             Text(state.isConfigured ? "잠금 해제" : "축의대 장부 시작하기")
                 .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(AppColors.text)
             Text(state.isConfigured ? "비밀번호를 입력해 앱을 엽니다." : "처음 사용할 비밀번호를 설정하세요.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColors.muted)
             SecureField("비밀번호", text: $password)
                 .textFieldStyle(.roundedBorder)
             if !state.isConfigured {
@@ -487,12 +716,13 @@ struct AuthView: View {
             if state.isConfigured {
                 Button("비밀번호를 잊으셨나요?") { showRecovery = true }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColors.muted)
             }
         }
         .padding(34)
         .frame(width: 420)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .background(AppColors.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(AppColors.line, lineWidth: 1))
         .shadow(radius: 24)
         .sheet(isPresented: $showRecovery) {
             PasswordResetView()
@@ -564,35 +794,66 @@ struct EntryTable: View {
     var body: some View {
         if entries.isEmpty {
             Text("아직 입력된 기록이 없습니다.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColors.muted)
                 .frame(maxWidth: .infinity, minHeight: 140)
-        } else {
-            if compact {
-                Table(entries) {
-                    TableColumn("봉투") { Text("\($0.envelopeNo)") }
-                    TableColumn("이름", value: \.name)
-                    TableColumn("모임", value: \.groupName)
-                    TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold) }
-                    TableColumn("식권") { Text("\($0.mealTicketCount)") }
-                }
-                .frame(minHeight: 300)
-            } else {
-                Table(entries) {
-                    TableColumn("봉투") { Text("\($0.envelopeNo)") }
-                    TableColumn("이름", value: \.name)
-                    TableColumn("모임", value: \.groupName)
-                    TableColumn("관계", value: \.relationship)
-                    TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold) }
-                    TableColumn("식권") { Text("\($0.mealTicketCount)") }
-                    TableColumn("방식") { Text($0.paymentMethod.label) }
-                    TableColumn("상태") { Text($0.status.label) }
-                    TableColumn("관리") { entry in
-                        EntryStatusButton(entry: entry)
+        } else if compact {
+            VStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    EntryCompactRow(entry: entry)
+                    if entry.id != entries.last?.id {
+                        Divider().background(AppColors.lineSoft)
                     }
                 }
-                .frame(minHeight: 520)
+            }
+            .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.lineSoft, lineWidth: 1))
+        } else {
+            Table(entries) {
+                TableColumn("봉투") { Text("\($0.envelopeNo)") }
+                TableColumn("이름", value: \.name)
+                TableColumn("모임", value: \.groupName)
+                TableColumn("관계", value: \.relationship)
+                TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold) }
+                TableColumn("식권") { Text("\($0.mealTicketCount)") }
+                TableColumn("방식") { Text($0.paymentMethod.label) }
+                TableColumn("상태") { Text($0.status.label) }
+                TableColumn("관리") { entry in
+                    EntryStatusButton(entry: entry)
+                }
+            }
+            .frame(minHeight: 520)
+        }
+    }
+}
+
+struct EntryCompactRow: View {
+    let entry: LedgerEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text("#\(entry.envelopeNo)")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(AppColors.gold)
+                .frame(width: 48, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry.name)
+                    .font(.headline)
+                    .foregroundStyle(AppColors.text)
+                Text([entry.groupName, entry.relationship].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.muted)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(formatWon(entry.amount))
+                    .font(.headline)
+                    .foregroundStyle(AppColors.gold)
+                Text("식권 \(entry.mealTicketCount)매")
+                    .font(.caption)
+                    .foregroundStyle(AppColors.muted)
             }
         }
+        .padding(16)
     }
 }
 
@@ -609,5 +870,101 @@ struct EntryStatusButton: View {
             }
         }
         .buttonStyle(.borderless)
+    }
+}
+
+struct AdaptivePair<First: View, Second: View>: View {
+    let stacked: Bool
+    let first: First
+    let second: Second
+
+    init(stacked: Bool, @ViewBuilder first: () -> First, @ViewBuilder second: () -> Second) {
+        self.stacked = stacked
+        self.first = first()
+        self.second = second()
+    }
+
+    var body: some View {
+        if stacked {
+            VStack(spacing: 18) {
+                first
+                second
+            }
+        } else {
+            HStack(spacing: 28) {
+                first
+                second
+            }
+        }
+    }
+}
+
+struct SoftTextField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    init(_ placeholder: String, text: Binding<String>) {
+        self.placeholder = placeholder
+        self._text = text
+    }
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .background(AppColors.field, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppColors.line, lineWidth: 1))
+    }
+}
+
+struct SettingsRow<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColors.text)
+            Spacer()
+            content
+        }
+        .padding(.vertical, 18)
+        .overlay(Rectangle().fill(AppColors.lineSoft).frame(height: 1), alignment: .bottom)
+    }
+}
+
+struct SettingsActionButton: View {
+    let title: String
+    let destructive: Bool
+    let action: () -> Void
+
+    init(_ title: String, destructive: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.destructive = destructive
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .foregroundStyle(destructive ? AppColors.danger : AppColors.text)
+                .background(destructive ? AppColors.danger.opacity(0.12) : AppColors.goldSoft, in: Capsule())
+                .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension ThemePreference {
+    var shortLabel: String {
+        switch self {
+        case .system: "시스템"
+        case .light: "라이트"
+        case .dark: "다크"
+        }
     }
 }
