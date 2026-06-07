@@ -5,6 +5,7 @@ from wedding_ledger.app import (
     format_number,
     is_amount_text,
     is_digits_or_empty,
+    merge_lookup_values,
     parse_amount,
     parse_required_int,
     validate_password,
@@ -40,6 +41,10 @@ class AppHelperTest(unittest.TestCase):
         self.assertTrue(is_amount_text("100000"))
         self.assertTrue(is_amount_text("100,000"))
         self.assertFalse(is_amount_text("십만원"))
+
+    def test_lookup_values_include_current_input_first(self) -> None:
+        self.assertEqual(merge_lookup_values("회사", ["친구", "회사"]), ["회사", "친구"])
+        self.assertEqual(merge_lookup_values("", ["친구", "친구"]), ["친구"])
 
     def test_validate_password_requires_min_length(self) -> None:
         validate_password("abcd")

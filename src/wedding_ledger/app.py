@@ -95,11 +95,27 @@ def parse_required_int(value: str, label: str, minimum: int = 0) -> int:
     return number
 
 
+def merge_lookup_values(current: str, values: list[str]) -> list[str]:
+    merged: list[str] = []
+    for value in [current, *values]:
+        clean = str(value or "").strip()
+        if clean and clean not in merged:
+            merged.append(clean)
+    return merged
+
+
 class SuggestionEntry(ttk.Frame):
-    def __init__(self, parent: tk.Widget, textvariable: tk.StringVar, width: int = 30) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget,
+        textvariable: tk.StringVar,
+        width: int = 30,
+        values_provider: Callable[[], list[str]] | None = None,
+    ) -> None:
         super().__init__(parent, style="Card.TFrame")
         self.variable = textvariable
         self.values: list[str] = []
+        self.values_provider = values_provider
         self.popup: tk.Toplevel | None = None
         self.entry = tk.Entry(
             self,
@@ -153,11 +169,13 @@ class SuggestionEntry(ttk.Frame):
 
     def show_popup(self) -> None:
         self.hide_popup()
+        if self.values_provider:
+            self.configure_values(self.values_provider())
         if not self.values:
-            return
+            self.values = ["저장된 목록이 없습니다"]
         self.popup = tk.Toplevel(self)
         self.popup.overrideredirect(True)
-        self.popup.configure(bg="#DADFED")
+        self.popup.configure(bg=BORDER)
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height() + 2
         width = max(self.winfo_width(), 220)
@@ -182,7 +200,7 @@ class SuggestionEntry(ttk.Frame):
 
         def choose(_event: tk.Event | None = None) -> str:
             selection = listbox.curselection()
-            if selection:
+            if selection and self.values[selection[0]] != "저장된 목록이 없습니다":
                 self.variable.set(listbox.get(selection[0]))
             self.hide_popup()
             self.entry.focus_set()
@@ -557,10 +575,10 @@ class WeddingLedgerApp(tk.Tk):
         self.envelope_entry = self._labeled_entry(form, "봉투번호", self.envelope_var, 1, validate_digits=True)
         self.name_entry = self._labeled_entry(form, "이름 *", self.name_var, 2)
         ttk.Label(form, text="모임", style="Card.TLabel").grid(row=3, column=0, sticky="e", padx=8, pady=7)
-        self.group_select = SuggestionEntry(form, self.group_var, width=24)
+        self.group_select = SuggestionEntry(form, self.group_var, width=24, values_provider=self.group_lookup_values)
         self.group_select.grid(row=3, column=1, columnspan=2, sticky="ew")
         ttk.Label(form, text="관계", style="Card.TLabel").grid(row=4, column=0, sticky="e", padx=8, pady=7)
-        self.relationship_select = SuggestionEntry(form, self.relationship_var, width=24)
+        self.relationship_select = SuggestionEntry(form, self.relationship_var, width=24, values_provider=self.relationship_lookup_values)
         self.relationship_select.grid(row=4, column=1, columnspan=2, sticky="ew")
 
         self.amount_entry = self._labeled_entry(form, "금액 *", self.amount_var, 5, validate_amount=True)
@@ -622,8 +640,16 @@ class WeddingLedgerApp(tk.Tk):
 
     def refresh_entry_defaults(self) -> None:
         self.envelope_var.set(str(self.db.next_envelope_no()))
-        self.group_select.configure_values(self.db.recent_groups())
-        self.relationship_select.configure_values(self.db.recent_relationships())
+        self.group_select.configure_values(self.group_lookup_values())
+        self.relationship_select.configure_values(self.relationship_lookup_values())
+
+    def group_lookup_values(self) -> list[str]:
+        current = self.group_var.get() if hasattr(self, "group_var") else ""
+        return merge_lookup_values(current, self.db.recent_groups())
+
+    def relationship_lookup_values(self) -> list[str]:
+        current = self.relationship_var.get() if hasattr(self, "relationship_var") else ""
+        return merge_lookup_values(current, self.db.recent_relationships())
 
     def clear_entry_form(self) -> None:
         self.name_var.set("")
@@ -881,13 +907,13 @@ class WeddingLedgerApp(tk.Tk):
                 widget.grid(row=idx, column=1, sticky="w")
                 edit_widgets.append(widget)
             elif key == "group_name":
-                select = SuggestionEntry(top, vars_map[key], width=28)
-                select.configure_values(self.db.recent_groups())
+                select = SuggestionEntry(top, vars_map[key], width=28, values_provider=lambda var=vars_map[key]: merge_lookup_values(var.get(), self.db.recent_groups()))
+                select.configure_values(merge_lookup_values(vars_map[key].get(), self.db.recent_groups()))
                 select.grid(row=idx, column=1, sticky="ew")
                 edit_widgets.append(select.entry)
             elif key == "relationship":
-                select = SuggestionEntry(top, vars_map[key], width=28)
-                select.configure_values(self.db.recent_relationships())
+                select = SuggestionEntry(top, vars_map[key], width=28, values_provider=lambda var=vars_map[key]: merge_lookup_values(var.get(), self.db.recent_relationships()))
+                select.configure_values(merge_lookup_values(vars_map[key].get(), self.db.recent_relationships()))
                 select.grid(row=idx, column=1, sticky="ew")
                 edit_widgets.append(select.entry)
             else:
