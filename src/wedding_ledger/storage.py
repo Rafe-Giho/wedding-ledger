@@ -160,9 +160,9 @@ class WeddingLedgerDB:
 
     def setup_auth(self, password: str) -> str:
         if self.is_configured():
-            raise ValueError("이미 비밀번호가 설정되어 있습니다.")
-        if len(password) < 6:
-            raise ValueError("비밀번호는 6자 이상이어야 합니다.")
+            raise ValueError("이미 PIN이 설정되어 있습니다.")
+        if len(password) < 4:
+            raise ValueError("PIN은 4자리 이상이어야 합니다.")
 
         password_salt = generate_salt()
         recovery_salt = generate_salt()
@@ -187,8 +187,8 @@ class WeddingLedgerDB:
         return verify_secret(password, salt, expected, iterations)
 
     def reset_password_with_recovery(self, recovery_key: str, new_password: str) -> bool:
-        if len(new_password) < 6:
-            raise ValueError("새 비밀번호는 6자 이상이어야 합니다.")
+        if len(new_password) < 4:
+            raise ValueError("새 PIN은 4자리 이상이어야 합니다.")
         salt = self.get_setting("recovery_salt")
         expected = self.get_setting("recovery_hash")
         iterations = int(self.get_setting("recovery_iterations") or PBKDF2_ITERATIONS)
@@ -207,8 +207,8 @@ class WeddingLedgerDB:
     def change_password(self, current_password: str, new_password: str) -> bool:
         if not self.verify_password(current_password):
             return False
-        if len(new_password) < 6:
-            raise ValueError("새 비밀번호는 6자 이상이어야 합니다.")
+        if len(new_password) < 4:
+            raise ValueError("새 PIN은 4자리 이상이어야 합니다.")
         password_salt = generate_salt()
         self.set_setting("password_salt", password_salt)
         self.set_setting("password_hash", hash_secret(new_password, password_salt))

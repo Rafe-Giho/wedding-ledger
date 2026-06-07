@@ -136,7 +136,7 @@ def workbook_xml(entries: list[dict[str, Any]], summary: dict[str, Any], audit_r
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
   <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-    <Title>Wedding Ledger Export</Title>
+    <Title>축의대 장부 Export</Title>
   </DocumentProperties>
   <Styles>
     <Style ss:ID="Default" ss:Name="Normal">
