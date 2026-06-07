@@ -41,8 +41,14 @@ final class SQLiteDatabase {
     func execute(_ sql: String, _ values: [SQLiteValue] = []) throws {
         let statement = try prepare(sql, values)
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_DONE else {
-            throw SQLiteError.stepFailed(lastError)
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE {
+                return
+            }
+            guard result == SQLITE_ROW else {
+                throw SQLiteError.stepFailed(lastError)
+            }
         }
     }
 
