@@ -37,7 +37,7 @@ enum ResponsiveLayout {
     init(width: CGFloat) {
         if width < 920 {
             self = .compact
-        } else if width < 1240 {
+        } else if width < 1120 {
             self = .medium
         } else {
             self = .expanded
@@ -52,6 +52,17 @@ enum ResponsiveLayout {
     var entryFormWidth: CGFloat { self == .medium ? 460 : 496 }
     var cardPadding: CGFloat { self == .compact ? 22 : 30 }
     var recentEntriesHeight: CGFloat { self == .compact ? 220 : 260 }
+    var summaryTileColumns: [GridItem] {
+        switch self {
+        case .expanded:
+            Array(repeating: GridItem(.flexible(minimum: 78), spacing: 8), count: 8)
+        case .medium:
+            Array(repeating: GridItem(.flexible(minimum: 120), spacing: 12), count: 4)
+        case .compact:
+            [GridItem(.adaptive(minimum: 150), spacing: 12)]
+        }
+    }
+    var summaryTileSpacing: CGFloat { self == .expanded ? 8 : 12 }
 }
 
 struct RootView: View {
@@ -626,7 +637,7 @@ struct SummaryView: View {
                 Text("정산")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.text)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 16)], spacing: 16) {
+                LazyVGrid(columns: layout.summaryTileColumns, spacing: layout.summaryTileSpacing) {
                     SummaryTile("정상 기록", "\(state.summary.activeCount)건")
                     SummaryTile("취소 기록", "\(state.summary.voidCount)건")
                     SummaryTile("총 축의금", formatWon(state.summary.totalAmount))

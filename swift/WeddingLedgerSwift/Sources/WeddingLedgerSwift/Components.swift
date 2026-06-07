@@ -164,15 +164,18 @@ struct SummaryTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppColors.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
             Text(value)
-                .font(.title2.bold())
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(AppColors.text)
                 .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .minimumScaleFactor(0.55)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
         .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.line.opacity(0.5)))
     }
