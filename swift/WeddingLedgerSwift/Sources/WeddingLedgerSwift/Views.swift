@@ -239,11 +239,17 @@ struct TopBarView: View {
     let compact: Bool
 
     var body: some View {
-        HStack(spacing: 18) {
+        HStack {
             Spacer()
-            ModePill(title: "\(state.mode.label) 모드")
-            ThemePreferenceControl(compact: compact)
-            VersionBadge()
+            HStack(spacing: compact ? 8 : 10) {
+                ModePill(title: "\(state.mode.label) 모드")
+                ThemePreferenceControl(compact: compact)
+                VersionBadge()
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, 6)
+            .background(AppColors.field.opacity(0.34), in: Capsule())
+            .overlay(Capsule().stroke(AppColors.lineSoft.opacity(0.48), lineWidth: 1))
         }
         .frame(minHeight: 36)
     }
@@ -454,7 +460,7 @@ struct ThemePreferenceControl: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .frame(width: compact ? 228 : 304)
+        .frame(width: compact ? 168 : 184)
     }
 }
 
