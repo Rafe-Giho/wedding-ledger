@@ -908,12 +908,43 @@ struct SummaryView: View {
                     SummaryTile("누락 봉투", state.summary.envelopeGaps.isEmpty ? "없음" : state.summary.envelopeGaps.map(String.init).joined(separator: ", "))
                     SummaryTile("동명이인", duplicateSummaryText(state.summary.duplicateNames))
                 }
+                SummaryInsightSection(section: $section)
                 ClosingChecklistCard(section: $section)
                     .frame(maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
         .frame(minHeight: layout == .compact ? nil : availableHeight)
+    }
+}
+
+struct SummaryInsightSection: View {
+    @EnvironmentObject private var state: AppState
+    @Binding var section: SectionKey
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("정산 인사이트")
+                    .font(.headline)
+                    .foregroundStyle(AppColors.text)
+                Text("마감 전 숫자 대조용 참고 정보")
+                    .font(.footnote)
+                    .foregroundStyle(AppColors.muted)
+                Spacer()
+            }
+            SettlementFocusGrid(section: $section)
+            if !state.summary.duplicateNames.isEmpty {
+                DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
+                    state.filterDuplicateName(duplicate.name)
+                    section = .search
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(AppColors.field.opacity(0.58), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.45), lineWidth: 1))
     }
 }
 
