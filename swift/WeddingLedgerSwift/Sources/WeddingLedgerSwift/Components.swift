@@ -156,6 +156,7 @@ struct PillButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 18)
                 .frame(height: 46)
                 .foregroundStyle(AppColors.text)
@@ -163,6 +164,8 @@ struct PillButton: View {
                 .overlay(Capsule().stroke(outlined ? AppColors.gold : AppColors.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .contentShape(Capsule())
+        .frame(maxWidth: .infinity)
     }
 }
 
