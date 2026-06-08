@@ -930,17 +930,7 @@ struct SummaryView: View {
                 Text("최근 입력: \(latestEntryTime)")
                     .font(.footnote)
                     .foregroundStyle(AppColors.muted)
-                LazyVGrid(columns: layout.summaryTileColumns, spacing: layout.summaryTileSpacing) {
-                    SummaryTile("정상 기록", "\(state.summary.activeCount)건")
-                    SummaryTile("취소 기록", "\(state.summary.voidCount)건")
-                    SummaryTile("총 축의금", formatWon(state.summary.totalAmount))
-                    SummaryTile("총 식권", "\(state.summary.totalTickets)매")
-                    SummaryTile("현금 합계", formatWon(state.summary.paymentTotals[.cash] ?? 0))
-                    SummaryTile("계좌 합계", formatWon(state.summary.paymentTotals[.transfer] ?? 0))
-                    SummaryTile("누락 봉투", state.summary.envelopeGaps.isEmpty ? "없음" : state.summary.envelopeGaps.map(String.init).joined(separator: ", "))
-                    SummaryTile("동명이인", duplicateSummaryText(state.summary.duplicateNames))
-                }
-                SummaryInsightSection(section: $section)
+                SummaryOverviewSection(section: $section)
                 ClosingChecklistCard(section: $section)
                     .frame(maxHeight: .infinity, alignment: .topLeading)
             }
@@ -957,33 +947,100 @@ struct SummaryView: View {
     }
 }
 
-struct SummaryInsightSection: View {
+struct SummaryOverviewSection: View {
     @EnvironmentObject private var state: AppState
     @Binding var section: SectionKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("정산 인사이트")
+                Text("정산 현황")
                     .font(.headline)
                     .foregroundStyle(AppColors.text)
-                Text("마감 전 숫자 대조용 참고 정보")
+                Text("총 기록과 검수 정보를 중복 없이 한 번에 확인합니다.")
                     .font(.footnote)
                     .foregroundStyle(AppColors.muted)
                 Spacer()
             }
-            SettlementFocusGrid(section: $section)
-            if !state.summary.duplicateNames.isEmpty {
-                DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
-                    state.filterDuplicateName(duplicate.name)
-                    section = .search
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 218), spacing: 12)], spacing: 12) {
+                SettlementCheckCard(
+                    title: "총 축의금",
+                    value: formatWon(state.summary.totalAmount),
+                    detail: "정상 \(state.summary.activeCount)건 · 취소 \(state.summary.voidCount)건",
+                    symbol: "wonsign"
+                )
+                SettlementCheckCard(
+                    title: "입금 방식",
+                    value: paymentHeadline,
+                    detail: paymentDetail,
+                    symbol: "creditcard"
+                )
+                SettlementCheckCard(
+                    title: "식권",
+                    value: "\(state.summary.totalTickets)매",
+                    detail: ticketDetail,
+                    symbol: "ticket"
+                )
+                SettlementCheckCard(
+                    title: "봉투 검수",
+                    value: "\(state.summary.activeCount)개",
+                    detail: envelopeDetail,
+                    symbol: "envelope.open"
+                )
+                Button {
+                    if let duplicate = state.summary.duplicateNames.first {
+                        state.filterDuplicateName(duplicate.name)
+                        section = .search
+                    }
+                } label: {
+                    SettlementCheckCard(
+                        title: "동명이인",
+                        value: state.summary.duplicateNames.isEmpty ? "없음" : "\(state.summary.duplicateNames.count)건",
+                        detail: duplicateDetail,
+                        symbol: "person.2"
+                    )
                 }
+                .buttonStyle(.plain)
+                .disabled(state.summary.duplicateNames.isEmpty)
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(AppColors.field.opacity(0.58), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.45), lineWidth: 1))
+    }
+
+    private var paymentHeadline: String {
+        let cash = state.summary.paymentTotals[.cash] ?? 0
+        let transfer = state.summary.paymentTotals[.transfer] ?? 0
+        if transfer > cash { return "계좌 \(formatWon(transfer))" }
+        return "현금 \(formatWon(cash))"
+    }
+
+    private var paymentDetail: String {
+        let cash = state.summary.paymentTotals[.cash] ?? 0
+        let transfer = state.summary.paymentTotals[.transfer] ?? 0
+        let other = state.summary.paymentTotals[.other] ?? 0
+        return "현금 \(formatWon(cash)) · 계좌 \(formatWon(transfer)) · 기타 \(formatWon(other))"
+    }
+
+    private var ticketDetail: String {
+        let total = state.operationSettings.totalMealTickets
+        guard total > 0 else { return "총 식권수를 설정하면 남은 매수를 표시합니다." }
+        return "준비 \(total)매 · 남은 \(max(0, total - state.summary.totalTickets))매"
+    }
+
+    private var envelopeDetail: String {
+        let expected = state.operationSettings.expectedEnvelopeCount
+        let expectedText = expected > 0 ? "예상 \(expected)개 · 차이 \(expected - state.summary.activeCount)개" : "예상 봉투수를 설정하면 차이를 표시합니다."
+        let gapText = state.summary.envelopeGaps.isEmpty ? "누락 없음" : "누락 \(state.summary.envelopeGaps.prefix(6).map(String.init).joined(separator: ", "))"
+        return "\(expectedText) · \(gapText)"
+    }
+
+    private var duplicateDetail: String {
+        state.summary.duplicateNames.isEmpty
+            ? "같은 이름 없음"
+            : state.summary.duplicateNames.prefix(3).map { "\($0.name) \($0.count)명" }.joined(separator: ", ")
     }
 }
 
