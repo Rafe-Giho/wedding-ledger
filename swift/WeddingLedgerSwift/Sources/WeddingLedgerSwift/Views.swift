@@ -196,7 +196,11 @@ struct WorkspaceContent: View {
     var body: some View {
         GeometryReader { proxy in
             let contentHeight = max(320, proxy.size.height - layout.contentPadding)
-            if section == .settings || layout == .compact {
+            if section == .search && layout != .compact {
+                content(availableHeight: contentHeight)
+                    .frame(minHeight: contentHeight, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            } else if section == .settings || layout == .compact {
                 ScrollView {
                     content(availableHeight: contentHeight)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -820,11 +824,11 @@ struct SearchView: View {
 
     var body: some View {
         Card(padding: layout.cardPadding, fillsAvailableSpace: layout != .compact) {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: layout == .compact ? 18 : 14) {
                 Text("검색")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.text)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: layout == .compact ? 150 : 180), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: layout == .compact ? 150 : 156), spacing: 10)], spacing: 10) {
                     SoftTextField("이름", text: Binding(
                         get: { filters.name },
                         set: {
@@ -851,21 +855,9 @@ struct SearchView: View {
                             Text(status.label).tag(Optional(status))
                         }
                     }
-                    Button("검색") { performSearch() }
-                        .buttonStyle(.plain)
-                        .frame(height: 48)
-                        .frame(maxWidth: .infinity)
-                        .background(AppColors.goldSoft, in: Capsule())
-                        .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
-                        .foregroundStyle(AppColors.text)
+                    SearchActionButton(title: "검색", primary: true) { performSearch() }
                         .keyboardShortcut(.return)
-                    Button("초기화") { resetSearch() }
-                        .buttonStyle(.plain)
-                        .frame(height: 48)
-                        .frame(maxWidth: .infinity)
-                        .background(AppColors.field, in: Capsule())
-                        .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
-                        .foregroundStyle(AppColors.text)
+                    SearchActionButton(title: "초기화", primary: false) { resetSearch() }
                 }
                 .submitLabel(.search)
                 .onSubmit(performSearch)
@@ -874,11 +866,11 @@ struct SearchView: View {
                     filters = state.searchFilters
                 }
                 EntryTable(entries: state.searchResults, compact: layout == .compact)
-                    .frame(minHeight: layout == .compact ? nil : 280, maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
+                    .frame(minHeight: layout == .compact ? nil : 220, maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
-        .frame(minHeight: layout == .compact ? nil : availableHeight)
+        .frame(minHeight: layout == .compact ? nil : availableHeight, maxHeight: layout == .compact ? nil : .infinity)
         .onAppear {
             filters = state.searchFilters
         }
@@ -899,6 +891,27 @@ struct SearchView: View {
     private func resetSearch() {
         filters = EntryFilters()
         state.resetSearch()
+    }
+}
+
+struct SearchActionButton: View {
+    let title: String
+    let primary: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppColors.text)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background(primary ? AppColors.goldSoft : AppColors.field, in: Capsule())
+        .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
+        .contentShape(Capsule())
     }
 }
 
@@ -1708,7 +1721,7 @@ struct EntryTable: View {
                 }
                 .width(min: 120, ideal: 180, max: 280)
             }
-            .frame(minHeight: 520)
+            .frame(minHeight: 220, maxHeight: .infinity)
         }
     }
 }
