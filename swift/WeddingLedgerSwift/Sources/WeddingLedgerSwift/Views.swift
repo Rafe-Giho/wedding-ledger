@@ -556,12 +556,15 @@ struct EntryFormView: View {
                 }
             } second: {
                 FieldLabel("입금방식", badge: "기본") {
-                    Picker("", selection: $state.draft.paymentMethod) {
-                        ForEach(PaymentMethod.allCases) { method in
-                            Text(method.label).tag(method)
+                    MenuValueField(
+                        value: state.draft.paymentMethod.label,
+                        placeholder: "방식 선택",
+                        options: PaymentMethod.allCases.map(\.label)
+                    ) { label in
+                        if let method = PaymentMethod.allCases.first(where: { $0.label == label }) {
+                            state.draft.paymentMethod = method
                         }
                     }
-                    .labelsHidden()
                     .onChange(of: state.draft.paymentMethod) { _, method in
                         if method == .transfer, state.draft.createdAtText.isEmpty {
                             state.draft.createdAtText = nowString()
@@ -594,21 +597,7 @@ struct EntryFormView: View {
                         state.updateDuplicateMatches()
                     }
             }
-            AdaptivePair(stacked: compact) {
-                FieldLabel("모임", badge: "선택") {
-                    SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
-                }
-            } second: {
-                FieldLabel("관계", badge: "선택") {
-                    SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
-                }
-            }
-            FieldLabel("대상", badge: "선택") {
-                SuggestionTextField(text: $state.draft.targetPerson, suggestions: state.targets)
-            }
-            Text("대상은 하객이 누구 쪽 손님인지 적는 칸입니다. 예: 신부, 아버지, 어머니, 형제")
-                .font(.caption)
-                .foregroundStyle(AppColors.muted)
+            guestContextFields(dense: dense)
             AdaptivePair(stacked: compact) {
                 FieldLabel("금액", badge: "필수") {
                     HStack {
@@ -654,6 +643,32 @@ struct EntryFormView: View {
                     .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
                     .scrollContentBackground(.hidden)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func guestContextFields(dense: Bool) -> some View {
+        if compact {
+            VStack(spacing: dense ? 8 : 12) {
+                guestContextField(title: "모임", text: $state.draft.groupName, suggestions: state.groups)
+                guestContextField(title: "관계", text: $state.draft.relationship, suggestions: state.relationships)
+                guestContextField(title: "대상", text: $state.draft.targetPerson, suggestions: state.targets)
+            }
+        } else {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: dense ? 142 : 156), spacing: dense ? 10 : 12)],
+                spacing: dense ? 8 : 10
+            ) {
+                guestContextField(title: "모임", text: $state.draft.groupName, suggestions: state.groups)
+                guestContextField(title: "관계", text: $state.draft.relationship, suggestions: state.relationships)
+                guestContextField(title: "대상", text: $state.draft.targetPerson, suggestions: state.targets)
+            }
+        }
+    }
+
+    private func guestContextField(title: String, text: Binding<String>, suggestions: [String]) -> some View {
+        FieldLabel(title, badge: "선택") {
+            SuggestionTextField(text: text, suggestions: suggestions)
         }
     }
 
@@ -1723,7 +1738,7 @@ struct EntryTable: View {
                 TableColumn("이름") { Text($0.name).lineLimit(1) }
                     .width(min: 78, ideal: 100, max: 150)
                 TableColumn("분류") { EntryCategoryCell(entry: $0) }
-                    .width(min: 132, ideal: 168, max: 220)
+                    .width(min: 94, ideal: 116, max: 142)
                 TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
                     .width(min: 92, ideal: 112, max: 132)
                 TableColumn("식권") { Text("\($0.mealTicketCount)").monospacedDigit() }
@@ -1740,7 +1755,7 @@ struct EntryTable: View {
                         .lineLimit(1)
                         .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
                 }
-                .width(min: 120, ideal: 180, max: 280)
+                .width(min: 90, ideal: 116, max: 160)
                 TableColumn("관리") { EntryManagementActions(entry: $0, compact: false) }
                     .width(min: 112, ideal: 124, max: 142)
             }

@@ -90,21 +90,55 @@ struct SuggestionTextField: View {
             TextField("입력", text: $text)
                 .textFieldStyle(.plain)
                 .foregroundStyle(AppColors.text)
-            Menu {
-                if suggestions.isEmpty {
-                    Text("저장된 목록이 없습니다.")
-                } else {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) { text = suggestion }
-                    }
-                }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .foregroundStyle(AppColors.muted)
+            OptionMenuButton(options: suggestions, emptyMessage: "저장된 목록이 없습니다.") { suggestion in
+                text = suggestion
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
         }
+    }
+}
+
+struct MenuValueField: View {
+    let value: String
+    let placeholder: String
+    let options: [String]
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(value.isEmpty ? placeholder : value)
+                .foregroundStyle(value.isEmpty ? AppColors.muted : AppColors.text)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            OptionMenuButton(options: options, emptyMessage: "선택 가능한 값이 없습니다.", onSelect: onSelect)
+        }
+    }
+}
+
+struct OptionMenuButton: View {
+    let options: [String]
+    let emptyMessage: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        Menu {
+            if options.isEmpty {
+                Text(emptyMessage)
+            } else {
+                ForEach(options, id: \.self) { option in
+                    Button(option) { onSelect(option) }
+                }
+            }
+        } label: {
+            Text("목록")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppColors.muted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(AppColors.goldSoft.opacity(0.72), in: Capsule())
+                .overlay(Capsule().stroke(AppColors.lineSoft, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
     }
 }
 
