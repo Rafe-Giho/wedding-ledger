@@ -179,22 +179,22 @@ struct QuickAmountButton: View {
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Capsule()
-                    .fill(outlined ? Color.clear : AppColors.goldSoft)
-                Capsule()
-                    .stroke(outlined ? AppColors.gold : AppColors.line, lineWidth: 1)
-                Text(title)
-                    .foregroundStyle(AppColors.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 12)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 46)
+            Text(title)
+                .foregroundStyle(AppColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    Capsule()
+                        .fill(outlined ? AppColors.goldSoft.opacity(0.001) : AppColors.goldSoft)
+                )
+                .overlay(Capsule().stroke(outlined ? AppColors.gold : AppColors.line, lineWidth: 1))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
+        .contentShape(Capsule())
         .frame(maxWidth: .infinity)
     }
 }
