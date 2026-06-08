@@ -13,6 +13,7 @@ APP_NAME = "축의대 장부"
 EXECUTABLE_NAME = "WeddingLedgerSwift"
 APP_VERSION = os.environ.get("APP_VERSION", "1.1.11")
 APP_BUILD = os.environ.get("APP_BUILD", "13")
+ICON_PATH = ROOT / "assets" / "app-icon" / "WeddingLedger.icns"
 DIST_DIR = ROOT / "dist"
 APP_DIR = DIST_DIR / f"{APP_NAME}.app"
 CONTENTS_DIR = APP_DIR / "Contents"
@@ -46,6 +47,7 @@ def write_info_plist() -> None:
         "CFBundleExecutable": EXECUTABLE_NAME,
         "CFBundleIdentifier": "com.local.weddingledger.swift",
         "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleIconFile": "WeddingLedger",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": APP_VERSION,
@@ -75,6 +77,8 @@ def build_app() -> Path:
     RESOURCES_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary, MACOS_DIR / EXECUTABLE_NAME)
     os.chmod(MACOS_DIR / EXECUTABLE_NAME, 0o755)
+    if ICON_PATH.exists():
+        shutil.copy2(ICON_PATH, RESOURCES_DIR / ICON_PATH.name)
     write_info_plist()
     sign_app()
     return APP_DIR
