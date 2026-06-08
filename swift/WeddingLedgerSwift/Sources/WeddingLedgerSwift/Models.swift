@@ -30,6 +30,17 @@ struct DuplicateName: Identifiable, Equatable {
     let count: Int
 }
 
+enum ClosingCheckKey: String, CaseIterable, Identifiable {
+    case envelope
+    case cash
+    case transfer
+    case ticket
+    case issues
+    case export
+
+    var id: String { rawValue }
+}
+
 struct OperationSettings: Equatable {
     var eventTitle = ""
     var totalMealTickets = 0

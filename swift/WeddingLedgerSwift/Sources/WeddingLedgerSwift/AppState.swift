@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
     @Published var searchResults: [LedgerEntry] = []
     @Published var searchFilters = EntryFilters()
     @Published var summary: LedgerSummary = .empty
+    @Published var closingChecks: Set<ClosingCheckKey> = []
     @Published var operationSettings: OperationSettings = .empty
     @Published var duplicateMatches: [LedgerEntry] = []
     @Published var groups: [String] = [defaultGroup]
@@ -94,6 +95,10 @@ final class AppState: ObservableObject {
         }
     }
 
+    func resetSearch() {
+        search(filters: EntryFilters())
+    }
+
     func filterDuplicateName(_ name: String) {
         var filters = EntryFilters()
         filters.name = name
@@ -125,11 +130,21 @@ final class AppState: ObservableObject {
     }
 
     func setTheme(_ preference: ThemePreference) {
+        let previous = themePreference
+        themePreference = preference
         do {
             try store.setThemePreference(preference)
-            themePreference = preference
         } catch {
+            themePreference = previous
             message = error.localizedDescription
+        }
+    }
+
+    func toggleClosingCheck(_ key: ClosingCheckKey) {
+        if closingChecks.contains(key) {
+            closingChecks.remove(key)
+        } else {
+            closingChecks.insert(key)
         }
     }
 

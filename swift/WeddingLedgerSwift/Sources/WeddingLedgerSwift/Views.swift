@@ -832,14 +832,24 @@ struct SearchView: View {
                             Text(status.label).tag(Optional(status))
                         }
                     }
-                    Button("검색") { state.search(filters: filters) }
+                    Button("검색") { performSearch() }
                         .buttonStyle(.plain)
                         .frame(height: 48)
                         .frame(maxWidth: .infinity)
                         .background(AppColors.goldSoft, in: Capsule())
                         .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
                         .foregroundStyle(AppColors.text)
+                        .keyboardShortcut(.return)
+                    Button("초기화") { resetSearch() }
+                        .buttonStyle(.plain)
+                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .background(AppColors.field, in: Capsule())
+                        .overlay(Capsule().stroke(AppColors.line, lineWidth: 1))
+                        .foregroundStyle(AppColors.text)
                 }
+                .submitLabel(.search)
+                .onSubmit(performSearch)
                 DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
                     state.filterDuplicateName(duplicate.name)
                     filters = state.searchFilters
@@ -861,6 +871,15 @@ struct SearchView: View {
     private func formatFilterAmount(_ value: String) -> String {
         let amount = parseAmount(value)
         return amount > 0 ? formatNumber(amount) : ""
+    }
+
+    private func performSearch() {
+        state.search(filters: filters)
+    }
+
+    private func resetSearch() {
+        filters = EntryFilters()
+        state.resetSearch()
     }
 }
 
@@ -889,12 +908,8 @@ struct SummaryView: View {
                     SummaryTile("누락 봉투", state.summary.envelopeGaps.isEmpty ? "없음" : state.summary.envelopeGaps.map(String.init).joined(separator: ", "))
                     SummaryTile("동명이인", duplicateSummaryText(state.summary.duplicateNames))
                 }
-                SettlementFocusGrid(section: $section)
-                DuplicateNameFilterRow(duplicates: state.summary.duplicateNames) { duplicate in
-                    state.filterDuplicateName(duplicate.name)
-                    section = .search
-                }
                 ClosingChecklistCard(section: $section)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
@@ -918,19 +933,65 @@ struct ClosingChecklistCard: View {
                         .foregroundStyle(AppColors.muted)
                 }
                 Spacer()
-                Button("검색으로 확인") {
+                Button("상세 검색") {
                     section = .search
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppColors.gold)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
-                ClosingCheckItem(number: "1", title: "봉투 수", detail: envelopeDetail)
-                ClosingCheckItem(number: "2", title: "현금", detail: "실물 현금 \(formatWon(state.summary.paymentTotals[.cash] ?? 0)) 대조")
-                ClosingCheckItem(number: "3", title: "계좌", detail: "계좌 입금 \(formatWon(state.summary.paymentTotals[.transfer] ?? 0)) 대조")
-                ClosingCheckItem(number: "4", title: "식권", detail: ticketDetail)
-                ClosingCheckItem(number: "5", title: "누락/동명이인", detail: duplicateAndGapDetail)
-                ClosingCheckItem(number: "6", title: "백업/엑셀", detail: "마감 전 백업 후 엑셀 추출")
+                ClosingCheckItem(
+                    number: "1",
+                    title: "봉투 수",
+                    detail: envelopeDetail,
+                    checked: state.closingChecks.contains(.envelope)
+                ) {
+                    state.toggleClosingCheck(.envelope)
+                }
+                ClosingCheckItem(
+                    number: "2",
+                    title: "현금",
+                    detail: "실물 현금 \(formatWon(state.summary.paymentTotals[.cash] ?? 0)) 대조",
+                    checked: state.closingChecks.contains(.cash)
+                ) {
+                    state.toggleClosingCheck(.cash)
+                }
+                ClosingCheckItem(
+                    number: "3",
+                    title: "계좌",
+                    detail: "계좌 입금 \(formatWon(state.summary.paymentTotals[.transfer] ?? 0)) 대조",
+                    checked: state.closingChecks.contains(.transfer)
+                ) {
+                    state.toggleClosingCheck(.transfer)
+                }
+                ClosingCheckItem(
+                    number: "4",
+                    title: "식권",
+                    detail: ticketDetail,
+                    checked: state.closingChecks.contains(.ticket)
+                ) {
+                    state.toggleClosingCheck(.ticket)
+                }
+                ClosingCheckItem(
+                    number: "5",
+                    title: "누락/동명이인",
+                    detail: duplicateAndGapDetail,
+                    checked: state.closingChecks.contains(.issues)
+                ) {
+                    if let duplicate = state.summary.duplicateNames.first {
+                        state.filterDuplicateName(duplicate.name)
+                        section = .search
+                    }
+                    state.toggleClosingCheck(.issues)
+                }
+                ClosingCheckItem(
+                    number: "6",
+                    title: "백업/엑셀",
+                    detail: "마감 전 백업 후 엑셀 추출",
+                    checked: state.closingChecks.contains(.export)
+                ) {
+                    state.toggleClosingCheck(.export)
+                }
             }
         }
         .padding(18)
@@ -962,29 +1023,38 @@ struct ClosingCheckItem: View {
     let number: String
     let title: String
     let detail: String
+    let checked: Bool
+    let toggle: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(number)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(AppColors.window)
-                .frame(width: 24, height: 24)
-                .background(AppColors.gold, in: Circle())
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(AppColors.text)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(AppColors.muted)
-                    .lineLimit(2)
+        Button(action: toggle) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: checked ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(checked ? AppColors.gold : AppColors.muted)
+                    .frame(width: 24, height: 24)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(number)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.gold)
+                        Text(title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(AppColors.text)
+                    }
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.muted)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 66, alignment: .topLeading)
+            .background(checked ? AppColors.goldSoft.opacity(0.72) : AppColors.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(checked ? AppColors.gold.opacity(0.65) : AppColors.lineSoft, lineWidth: 1))
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 66, alignment: .topLeading)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppColors.lineSoft, lineWidth: 1))
+        .buttonStyle(.plain)
     }
 }
 
@@ -1555,18 +1625,23 @@ struct EntryTable: View {
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.lineSoft, lineWidth: 1))
         } else {
             Table(entries) {
-                TableColumn("봉투") { Text("\($0.envelopeNo)") }
+                TableColumn("봉투") { Text("\($0.envelopeNo)").monospacedDigit() }
+                    .width(min: 52, ideal: 60, max: 68)
                 TableColumn("이름", value: \.name)
                 TableColumn("모임", value: \.groupName)
                 TableColumn("관계", value: \.relationship)
                 TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold) }
-                TableColumn("식권") { Text("\($0.mealTicketCount)") }
+                TableColumn("식권") { Text("\($0.mealTicketCount)").monospacedDigit() }
+                    .width(min: 44, ideal: 52, max: 60)
                 TableColumn("방식") { Text($0.paymentMethod.label) }
+                    .width(min: 52, ideal: 60, max: 72)
                 TableColumn("상태") { Text($0.status.label) }
+                    .width(min: 50, ideal: 58, max: 70)
                 TableColumn("입력시간") { Text($0.createdAt) }
                 TableColumn("관리") { entry in
                     EntryStatusButton(entry: entry)
                 }
+                .width(min: 72, ideal: 82, max: 96)
             }
             .frame(minHeight: 520)
         }
