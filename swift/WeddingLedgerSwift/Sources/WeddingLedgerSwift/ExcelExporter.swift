@@ -204,7 +204,7 @@ private func stylesXML() -> String {
 }
 
 private func detailRows(entries: [LedgerEntry]) -> [[XLSXCell]] {
-    let headers = ["봉투번호", "이름", "모임", "관계", "금액", "식권수", "입금방식", "상태", "모드", "입력시간", "입력일시값", "수정시간", "입력일", "시간대", "메모"]
+    let headers = ["봉투번호", "이름", "모임", "관계", "금액", "식권수", "입금방식", "상태", "모드", "입력시간", "입력일시값", "수정시간", "입력일", "메모"]
     var rows = [headers.map { XLSXCell.text($0, style: styleHeader) }]
     for (index, entry) in entries.enumerated() {
         let row = index + 2
@@ -222,7 +222,6 @@ private func detailRows(entries: [LedgerEntry]) -> [[XLSXCell]] {
             .formula("IF(J\(row)=\"\",\"\",DATEVALUE(LEFT(J\(row),10))+TIMEVALUE(RIGHT(J\(row),8)))", style: styleDateTime),
             .text(entry.updatedAt),
             .formula("IF(J\(row)=\"\",\"\",DATEVALUE(LEFT(J\(row),10)))", style: styleDate),
-            .formula("IF(J\(row)=\"\",\"\",HOUR(K\(row)))"),
             .text(entry.memo)
         ])
     }
@@ -255,27 +254,8 @@ private func summaryRows(lastRow: Int, settings: OperationSettings) -> [[XLSXCel
     ]
 }
 
-private func groupRows(summary: LedgerSummary, lastRow: Int) -> [[XLSXCell]] {
-    let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
-    let groupRange = "'전체내역'!$C$2:$C$\(lastRow)"
-    let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
-    let ticketRange = "'전체내역'!$F$2:$F$\(lastRow)"
-    var rows: [[XLSXCell]] = [[.text("모임", style: styleHeader), .text("건수", style: styleHeader), .text("총액", style: styleHeader), .text("식권 수", style: styleHeader), .text("평균 축의금", style: styleHeader)]]
-    for (index, group) in summary.groupTotals.enumerated() {
-        let row = index + 2
-        rows.append([
-            .text(group.groupName),
-            .formula("COUNTIFS(\(groupRange),A\(row),\(statusRange),\"정상\")"),
-            .formula("SUMIFS(\(amountRange),\(groupRange),A\(row),\(statusRange),\"정상\")", style: styleMoney),
-            .formula("SUMIFS(\(ticketRange),\(groupRange),A\(row),\(statusRange),\"정상\")"),
-            .formula("IFERROR(C\(row)/B\(row),0)", style: styleMoney)
-        ])
-    }
-    return rows
-}
-
 private func searchRows(lastRow: Int) -> [[XLSXCell]] {
-    let detailRange = "'전체내역'!$A$2:$O$\(lastRow)"
+    let rowRange = "ROW('전체내역'!$A$2:$A$\(lastRow))-ROW('전체내역'!$A$2)+1"
     let nameRange = "'전체내역'!$B$2:$B$\(lastRow)"
     let groupRange = "'전체내역'!$C$2:$C$\(lastRow)"
     let relationshipRange = "'전체내역'!$D$2:$D$\(lastRow)"
@@ -284,25 +264,28 @@ private func searchRows(lastRow: Int) -> [[XLSXCell]] {
     let paymentRange = "'전체내역'!$G$2:$G$\(lastRow)"
     let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
     let serialRange = "'전체내역'!$K$2:$K$\(lastRow)"
-    let criteria = """
-    (IF($B$3="",TRUE,ISNUMBER(SEARCH($B$3,\(nameRange)))))*
-    (IF($B$4="",TRUE,ISNUMBER(SEARCH($B$4,\(groupRange)))))*
-    (IF($B$5="",TRUE,ISNUMBER(SEARCH($B$5,\(relationshipRange)))))*
-    (IF($B$6="",TRUE,\(paymentRange)=$B$6))*
-    (IF($B$7="",TRUE,\(statusRange)=$B$7))*
-    (\(amountRange)>=IF($B$8="",0,$B$8))*
-    (\(amountRange)<=IF($B$9="",999999999,$B$9))*
-    (IF($B$10="",TRUE,\(ticketRange)=$B$10))*
-    (\(serialRange)>=IF($B$11="",0,DATEVALUE(LEFT($B$11,10))+TIMEVALUE(RIGHT($B$11,8))))*
-    (\(serialRange)<=IF($B$12="",999999,DATEVALUE(LEFT($B$12,10))+TIMEVALUE(RIGHT($B$12,8))))
-    """.replacingOccurrences(of: "\n", with: "")
-    let filterFormula = "FILTER(\(detailRange),\(criteria),\"조건에 맞는 기록 없음\")"
-    return [
+    let criteria = [
+        "IF($B$3=\"\",TRUE,ISNUMBER(SEARCH($B$3,\(nameRange))))",
+        "IF($B$4=\"\",TRUE,ISNUMBER(SEARCH($B$4,\(groupRange))))",
+        "IF($B$5=\"\",TRUE,ISNUMBER(SEARCH($B$5,\(relationshipRange))))",
+        "IF($B$6=\"\",TRUE,\(paymentRange)=$B$6)",
+        "IF($B$7=\"\",TRUE,\(statusRange)=$B$7)",
+        "\(amountRange)>=IF($B$8=\"\",0,$B$8)",
+        "\(amountRange)<=IF($B$9=\"\",999999999,$B$9)",
+        "IF($B$10=\"\",TRUE,\(ticketRange)=$B$10)",
+        "\(serialRange)>=IF($B$11=\"\",0,DATEVALUE(LEFT($B$11,10))+TIMEVALUE(RIGHT($B$11,8)))",
+        "\(serialRange)<=IF($B$12=\"\",999999,DATEVALUE(LEFT($B$12,10))+TIMEVALUE(RIGHT($B$12,8)))"
+    ]
+    let aggregateCriteria = criteria.map { "(\($0))" }.joined(separator: "*")
+    let sumProductCriteria = criteria.map { "--(\($0))" }.joined(separator: ",")
+    let resultStartRow = 16
+    let resultRowCount = max(lastRow - 1, 20)
+    var rows: [[XLSXCell]] = [
         [.text("검색 조건", style: styleTitle), .text("입력값", style: styleTitle), .text("설명", style: styleTitle), .blank(), .text("검색 요약", style: styleTitle), .text("값", style: styleTitle)],
-        [.text("사용법"), .text("B열에 조건 입력"), .text("아래 결과가 자동 갱신됩니다."), .blank(), .text("결과 건수"), .formula("IFERROR(ROWS(A16#),0)")],
-        [.text("이름 포함"), .blank(), .text("예: 김민수"), .blank(), .text("결과 총액"), .formula("IFERROR(SUM(INDEX(A16#,0,5)),0)", style: styleMoney)],
-        [.text("모임 포함"), .blank(), .text("예: 회사"), .blank(), .text("결과 식권"), .formula("IFERROR(SUM(INDEX(A16#,0,6)),0)")],
-        [.text("관계 포함"), .blank(), .text("예: 친구"), .blank(), .text("최근 결과 입력시간"), .formula("IFERROR(MAX(INDEX(A16#,0,11)),\"\")", style: styleDateTime)],
+        [.text("사용법"), .text("B열에 조건 입력"), .text("조건을 비우면 전체 포함. 결과는 16행부터 표시됩니다."), .blank(), .text("결과 건수"), .formula("SUMPRODUCT(\(sumProductCriteria))")],
+        [.text("이름 포함"), .blank(), .text("예: 김민수"), .blank(), .text("결과 총액"), .formula("SUMPRODUCT(\(sumProductCriteria),\(amountRange))", style: styleMoney)],
+        [.text("모임 포함"), .blank(), .text("예: 회사"), .blank(), .text("결과 식권"), .formula("SUMPRODUCT(\(sumProductCriteria),\(ticketRange))")],
+        [.text("관계 포함"), .blank(), .text("예: 친구"), .blank(), .blank(), .blank()],
         [.text("입금방식"), .blank(), .text("현금/계좌/기타"), .blank(), .blank(), .blank()],
         [.text("상태"), .text("정상"), .text("정상/취소"), .blank(), .blank(), .blank()],
         [.text("최소 금액"), .blank(), .text("숫자만 입력"), .blank(), .blank(), .blank()],
@@ -310,64 +293,195 @@ private func searchRows(lastRow: Int) -> [[XLSXCell]] {
         [.text("식권수"), .blank(), .text("정확히 일치"), .blank(), .blank(), .blank()],
         [.text("시작 입력시간"), .blank(), .text("yyyy-mm-dd hh:mm:ss"), .blank(), .blank(), .blank()],
         [.text("종료 입력시간"), .blank(), .text("yyyy-mm-dd hh:mm:ss"), .blank(), .blank(), .blank()],
-        [.blank(), .blank(), .blank(), .blank(), .blank(), .blank()],
+        [.text("주의"), .text("입금방식/상태는 드롭다운 권장"), .text("금액과 식권수는 쉼표 없이 숫자만 입력하면 가장 안전합니다."), .blank(), .blank(), .blank()],
         [.text("검색 결과", style: styleTitle), .blank(), .blank(), .blank(), .blank(), .blank()],
-        ["봉투번호", "이름", "모임", "관계", "금액", "식권수", "입금방식", "상태", "모드", "입력시간", "입력일시값", "수정시간", "입력일", "시간대", "메모"].map { .text($0, style: styleHeader) },
-        [.formula(filterFormula)]
+        ["봉투번호", "이름", "모임", "관계", "금액", "식권수", "입금방식", "상태", "모드", "입력시간", "입력일시값", "수정시간", "입력일", "메모"].map { .text($0, style: styleHeader) }
+    ]
+    for resultOffset in 0..<resultRowCount {
+        let row = resultStartRow + resultOffset
+        let rankFormula = "AGGREGATE(15,6,(\(rowRange))/(\(aggregateCriteria)),ROWS($A$\(resultStartRow):A\(row)))"
+        rows.append((1...14).map { column in
+            let sourceColumn = columnName(column)
+            let sourceRange = "'전체내역'!$\(sourceColumn)$2:$\(sourceColumn)$\(lastRow)"
+            let style = column == 5 ? styleMoney : (column == 11 ? styleDateTime : (column == 13 ? styleDate : styleNormal))
+            return .formula("IFERROR(INDEX(\(sourceRange),\(rankFormula)),\"\")", style: style)
+        })
+    }
+    return rows
+}
+
+private func envelopeReviewRows(entries: [LedgerEntry], summary: LedgerSummary, auditRows: [[String: String]]) -> [[XLSXCell]] {
+    let canceled = entries.filter { $0.status == .void }.sorted { $0.envelopeNo < $1.envelopeNo }
+    let deleted = auditRows.filter { $0["action"] == "delete" }
+    let duplicateEnvelopeNumbers = Dictionary(grouping: entries, by: \.envelopeNo)
+        .filter { $0.value.count > 1 }
+        .keys
+        .sorted()
+    var rows: [[XLSXCell]] = [
+        [.text("봉투 검수 요약", style: styleTitle), .text("값", style: styleTitle), .text("설명", style: styleTitle)],
+        [.text("정상 봉투수"), .number(summary.activeCount), .text("현재 정산에 포함되는 봉투")],
+        [.text("취소 봉투수"), .number(summary.voidCount), .text("취소 처리되어 정산에서 제외")],
+        [.text("삭제 이력 수"), .number(deleted.count), .text("검색에서 확인 후 삭제한 기록")],
+        [.text("누락 봉투번호"), .text(summary.envelopeGaps.isEmpty ? "없음" : summary.envelopeGaps.map(String.init).joined(separator: ", ")), .text("현재 남아 있는 기록 기준")],
+        [.text("중복 봉투번호"), .text(duplicateEnvelopeNumbers.isEmpty ? "없음" : duplicateEnvelopeNumbers.map(String.init).joined(separator: ", ")), .text("동일 모드 내 중복 여부")],
+        [.blank(), .blank(), .blank()],
+        [.text("취소 기록", style: styleTitle), .blank(), .blank()],
+        [.text("봉투번호", style: styleHeader), .text("이름", style: styleHeader), .text("금액", style: styleHeader), .text("식권수", style: styleHeader), .text("입력시간", style: styleHeader), .text("메모", style: styleHeader)]
+    ]
+    if canceled.isEmpty {
+        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank(), .blank()])
+    } else {
+        for entry in canceled {
+            rows.append([.number(entry.envelopeNo), .text(entry.name), .number(entry.amount, style: styleMoney), .number(entry.mealTicketCount), .text(entry.createdAt), .text(entry.memo)])
+        }
+    }
+    rows += [
+        [.blank(), .blank(), .blank()],
+        [.text("삭제 이력", style: styleTitle), .blank(), .blank()],
+        [.text("삭제시간", style: styleHeader), .text("봉투번호", style: styleHeader), .text("이름", style: styleHeader), .text("사유", style: styleHeader), .text("삭제 전 값", style: styleHeader)]
+    ]
+    if deleted.isEmpty {
+        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank()])
+    } else {
+        for audit in deleted {
+            rows.append([.text(audit["created_at"] ?? ""), .text(audit["envelope_no"] ?? ""), .text(audit["name"] ?? ""), .text(audit["reason"] ?? ""), .text(audit["before_json"] ?? "")])
+        }
+    }
+    return rows
+}
+
+private func paymentReviewRows(lastRow: Int) -> [[XLSXCell]] {
+    let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
+    let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
+    let paymentRange = "'전체내역'!$G$2:$G$\(lastRow)"
+    return [
+        [.text("현금·계좌 정산", style: styleTitle), .blank(), .blank(), .blank()],
+        [.text("입금방식", style: styleHeader), .text("정상 건수", style: styleHeader), .text("정상 합계", style: styleHeader), .text("취소 건수", style: styleHeader), .text("검수 메모", style: styleHeader)],
+        [.text("현금"), .formula("COUNTIFS(\(paymentRange),A3,\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(paymentRange),A3,\(statusRange),\"정상\")", style: styleMoney), .formula("COUNTIFS(\(paymentRange),A3,\(statusRange),\"취소\")"), .blank()],
+        [.text("계좌"), .formula("COUNTIFS(\(paymentRange),A4,\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(paymentRange),A4,\(statusRange),\"정상\")", style: styleMoney), .formula("COUNTIFS(\(paymentRange),A4,\(statusRange),\"취소\")"), .blank()],
+        [.text("기타"), .formula("COUNTIFS(\(paymentRange),A5,\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(paymentRange),A5,\(statusRange),\"정상\")", style: styleMoney), .formula("COUNTIFS(\(paymentRange),A5,\(statusRange),\"취소\")"), .blank()],
+        [.text("총액"), .formula("SUM(B3:B5)"), .formula("SUM(C3:C5)", style: styleMoney), .formula("SUM(D3:D5)"), .blank()],
+        [.blank(), .blank(), .blank(), .blank(), .blank()],
+        [.text("현금 실물 검수", style: styleTitle), .blank(), .blank(), .blank(), .blank()],
+        [.text("앱 현금 합계"), .formula("C3", style: styleMoney), .text("전체내역 기준")],
+        [.text("실제 현금 입력"), .blank(style: styleMoney), .text("마감 때 직접 입력")],
+        [.text("차이"), .formula("IF(B10=\"\",\"\",B10-B9)", style: styleMoney), .text("실제 현금 - 앱 현금 합계")]
     ]
 }
 
-private func hourlyRows(lastRow: Int) -> [[XLSXCell]] {
+private func ticketReviewRows(entries: [LedgerEntry], lastRow: Int, settings: OperationSettings) -> [[XLSXCell]] {
     let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
-    let hourRange = "'전체내역'!$N$2:$N$\(lastRow)"
-    let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
     let ticketRange = "'전체내역'!$F$2:$F$\(lastRow)"
-    var rows: [[XLSXCell]] = [[.text("시간대", style: styleHeader), .text("건수", style: styleHeader), .text("총액", style: styleHeader), .text("식권 수", style: styleHeader)]]
-    for hour in 0...23 {
-        let row = hour + 2
-        rows.append([
-            .number(hour),
-            .formula("COUNTIFS(\(hourRange),A\(row),\(statusRange),\"정상\")"),
-            .formula("SUMIFS(\(amountRange),\(hourRange),A\(row),\(statusRange),\"정상\")", style: styleMoney),
-            .formula("SUMIFS(\(ticketRange),\(hourRange),A\(row),\(statusRange),\"정상\")")
-        ])
+    let ticketEntries = entries.filter { $0.mealTicketCount > 0 }.sorted { $0.envelopeNo < $1.envelopeNo }
+    var rows: [[XLSXCell]] = [
+        [.text("식권 검수", style: styleTitle), .text("값", style: styleTitle), .text("설명", style: styleTitle)],
+        [.text("준비 식권"), .number(settings.totalMealTickets), .text("앱 설정값")],
+        [.text("배부 식권"), .formula("SUMIF(\(statusRange),\"정상\",\(ticketRange))"), .text("정상 기록 기준")],
+        [.text("남은 식권"), .formula("IF(B2=0,\"\",B2-B3)"), .text("준비 식권 - 배부 식권")],
+        [.text("취소 기록 식권"), .formula("SUMIF(\(statusRange),\"취소\",\(ticketRange))"), .text("취소되어 정산 제외")],
+        [.blank(), .blank(), .blank()],
+        [.text("식권 배부 기록", style: styleTitle), .blank(), .blank()],
+        [.text("봉투번호", style: styleHeader), .text("이름", style: styleHeader), .text("식권수", style: styleHeader), .text("상태", style: styleHeader), .text("입금방식", style: styleHeader), .text("입력시간", style: styleHeader)]
+    ]
+    if ticketEntries.isEmpty {
+        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank(), .blank()])
+    } else {
+        for entry in ticketEntries {
+            rows.append([.number(entry.envelopeNo), .text(entry.name), .number(entry.mealTicketCount), .text(entry.status.label), .text(entry.paymentMethod.label), .text(entry.createdAt)])
+        }
     }
     return rows
 }
 
-private func duplicateRows(summary: LedgerSummary, lastRow: Int) -> [[XLSXCell]] {
-    let nameRange = "'전체내역'!$B$2:$B$\(lastRow)"
-    let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
-    let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
-    let ticketRange = "'전체내역'!$F$2:$F$\(lastRow)"
-    let envelopeRange = "'전체내역'!$A$2:$A$\(lastRow)"
-    var rows: [[XLSXCell]] = [[.text("이름", style: styleHeader), .text("인원", style: styleHeader), .text("총액", style: styleHeader), .text("식권 수", style: styleHeader), .text("봉투번호", style: styleHeader)]]
-    if summary.duplicateNames.isEmpty {
-        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank()])
+private func duplicateReviewRows(entries: [LedgerEntry], summary: LedgerSummary) -> [[XLSXCell]] {
+    let duplicateCounts = Dictionary(uniqueKeysWithValues: summary.duplicateNames.map { ($0.name, $0.count) })
+    let duplicateEntries = entries
+        .filter { $0.status == .active && duplicateCounts[$0.name] != nil }
+        .sorted { $0.name == $1.name ? $0.envelopeNo < $1.envelopeNo : $0.name < $1.name }
+    var rows: [[XLSXCell]] = [[.text("이름", style: styleHeader), .text("인원", style: styleHeader), .text("봉투번호", style: styleHeader), .text("모임", style: styleHeader), .text("관계", style: styleHeader), .text("금액", style: styleHeader), .text("식권수", style: styleHeader), .text("입금방식", style: styleHeader), .text("입력시간", style: styleHeader), .text("메모", style: styleHeader)]]
+    if duplicateEntries.isEmpty {
+        rows.append([.text("동명이인 없음"), .blank(), .blank(), .blank(), .blank(), .blank(), .blank(), .blank(), .blank(), .blank()])
         return rows
     }
-    for (index, duplicate) in summary.duplicateNames.enumerated() {
-        let row = index + 2
-        rows.append([
-            .text(duplicate.name),
-            .formula("IF(A\(row)=\"\",\"\",COUNTIFS(\(nameRange),A\(row),\(statusRange),\"정상\"))"),
-            .formula("IF(A\(row)=\"\",\"\",SUMIFS(\(amountRange),\(nameRange),A\(row),\(statusRange),\"정상\"))", style: styleMoney),
-            .formula("IF(A\(row)=\"\",\"\",SUMIFS(\(ticketRange),\(nameRange),A\(row),\(statusRange),\"정상\"))"),
-            .formula("IF(A\(row)=\"\",\"\",TEXTJOIN(\", \",TRUE,FILTER(\(envelopeRange),(\(nameRange)=A\(row))*(\(statusRange)=\"정상\"))))")
-        ])
+    for entry in duplicateEntries {
+        rows.append([.text(entry.name), .number(duplicateCounts[entry.name] ?? 0), .number(entry.envelopeNo), .text(entry.groupName), .text(entry.relationship), .number(entry.amount, style: styleMoney), .number(entry.mealTicketCount), .text(entry.paymentMethod.label), .text(entry.createdAt), .text(entry.memo)])
     }
     return rows
 }
 
-private func auditRows(_ auditRows: [[String: String]]) -> [[XLSXCell]] {
+private func amountReviewRows(entries: [LedgerEntry], lastRow: Int) -> [[XLSXCell]] {
+    let statusRange = "'전체내역'!$H$2:$H$\(lastRow)"
+    let amountRange = "'전체내역'!$E$2:$E$\(lastRow)"
+    let quickAmounts = Set(defaultQuickAmounts)
+    let specialEntries = entries
+        .filter { $0.status == .active && specialAmountReason($0.amount, quickAmounts: quickAmounts) != nil }
+        .sorted { $0.amount == $1.amount ? $0.envelopeNo < $1.envelopeNo : $0.amount > $1.amount }
+    let directInputCount = entries.filter { $0.status == .active && !quickAmounts.contains($0.amount) }.count
+    let notTenThousandUnitCount = entries.filter { $0.status == .active && $0.amount % 10_000 != 0 }.count
+    var rows: [[XLSXCell]] = [
+        [.text("고액·특이금액 요약", style: styleTitle), .blank(), .blank(), .blank()],
+        [.text("구분", style: styleHeader), .text("기준", style: styleHeader), .text("건수", style: styleHeader), .text("합계", style: styleHeader)],
+        [.text("30만원 이상"), .text(">= 300,000"), .formula("COUNTIFS(\(amountRange),\">=300000\",\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(amountRange),\">=300000\",\(statusRange),\"정상\")", style: styleMoney)],
+        [.text("50만원 이상"), .text(">= 500,000"), .formula("COUNTIFS(\(amountRange),\">=500000\",\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(amountRange),\">=500000\",\(statusRange),\"정상\")", style: styleMoney)],
+        [.text("100만원 이상"), .text(">= 1,000,000"), .formula("COUNTIFS(\(amountRange),\">=1000000\",\(statusRange),\"정상\")"), .formula("SUMIFS(\(amountRange),\(amountRange),\">=1000000\",\(statusRange),\"정상\")", style: styleMoney)],
+        [.text("빠른선택 외 금액"), .text("직접 입력 가능성"), .number(directInputCount), .blank()],
+        [.text("만원 단위 아님"), .text("금액 확인 권장"), .number(notTenThousandUnitCount), .blank()],
+        [.blank(), .blank(), .blank(), .blank()],
+        [.text("상세 기록", style: styleTitle), .blank(), .blank(), .blank()],
+        [.text("봉투번호", style: styleHeader), .text("이름", style: styleHeader), .text("금액", style: styleHeader), .text("확인 사유", style: styleHeader), .text("입금방식", style: styleHeader), .text("입력시간", style: styleHeader), .text("메모", style: styleHeader)]
+    ]
+    if specialEntries.isEmpty {
+        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank(), .blank(), .blank()])
+    } else {
+        for entry in specialEntries {
+            rows.append([.number(entry.envelopeNo), .text(entry.name), .number(entry.amount, style: styleMoney), .text(specialAmountReason(entry.amount, quickAmounts: quickAmounts) ?? ""), .text(entry.paymentMethod.label), .text(entry.createdAt), .text(entry.memo)])
+        }
+    }
+    return rows
+}
+
+private func specialAmountReason(_ amount: Int, quickAmounts: Set<Int>) -> String? {
+    var reasons: [String] = []
+    if amount >= 1_000_000 {
+        reasons.append("100만원 이상")
+    } else if amount >= 500_000 {
+        reasons.append("50만원 이상")
+    } else if amount >= 300_000 {
+        reasons.append("30만원 이상")
+    }
+    if !quickAmounts.contains(amount) {
+        reasons.append("빠른선택 외")
+    }
+    if amount % 10_000 != 0 {
+        reasons.append("만원 단위 아님")
+    }
+    return reasons.isEmpty ? nil : reasons.joined(separator: ", ")
+}
+
+private func auditActionLabel(_ action: String) -> String {
+    switch action {
+    case "create": "생성"
+    case "void": "취소"
+    case "restore": "복구"
+    case "delete": "삭제"
+    default: action
+    }
+}
+
+private func correctionAuditRows(_ auditRows: [[String: String]]) -> [[XLSXCell]] {
     let headers = ["시간", "봉투번호", "이름", "동작", "사유", "변경 전", "변경 후"]
     var rows = [headers.map { XLSXCell.text($0, style: styleHeader) }]
-    rows += auditRows.map {
+    let trackedRows = auditRows.filter { ["void", "restore", "delete"].contains($0["action"] ?? "") }
+    if trackedRows.isEmpty {
+        rows.append([.text("없음"), .blank(), .blank(), .blank(), .blank(), .blank(), .blank()])
+        return rows
+    }
+    rows += trackedRows.map {
         [
             .text($0["created_at"] ?? ""),
             .text($0["envelope_no"] ?? ""),
             .text($0["name"] ?? ""),
-            .text($0["action"] ?? ""),
+            .text(auditActionLabel($0["action"] ?? "")),
             .text($0["reason"] ?? ""),
             .text($0["before_json"] ?? ""),
             .text($0["after_json"] ?? "")
@@ -387,11 +501,13 @@ private func guideRows(mode: LedgerMode, exportDate: String, settings: Operation
         [.text("운영 메모"), .text(settings.operationNote.isEmpty ? "-" : settings.operationNote)],
         [.text("전체내역"), .text("원본 데이터입니다. 필터가 켜져 있고 입력시간은 초 단위까지 표시됩니다.")],
         [.text("요약"), .text("주요 수치는 전체내역을 참조하는 함수로 계산됩니다.")],
-        [.text("검색용"), .text("B열 조건을 입력하면 A16부터 결과가 자동으로 펼쳐집니다.")],
-        [.text("모임별"), .text("모임별 건수, 총액, 식권, 평균 축의금을 계산합니다.")],
-        [.text("시간대별"), .text("입력시간 기준 시간대별 집중도를 확인합니다.")],
-        [.text("동명이인"), .text("같은 이름의 정상 기록을 자동으로 찾아 인원과 봉투번호를 보여줍니다.")],
-        [.text("수정이력"), .text("취소, 복구 등 감사 로그를 확인합니다.")]
+        [.text("검색용"), .text("B열 조건을 입력하면 16행부터 결과가 자동으로 채워집니다. 스필 참조 없이 호환성 높은 일반 수식을 사용합니다.")],
+        [.text("봉투 검수"), .text("봉투번호 누락, 중복, 취소 기록, 삭제 이력을 확인합니다.")],
+        [.text("현금·계좌 정산"), .text("현금, 계좌, 기타 합계와 현금 실물 검수 차이를 확인합니다.")],
+        [.text("식권 검수"), .text("배부 식권, 준비 식권, 남은 식권과 식권 배부 기록을 확인합니다.")],
+        [.text("동명이인 점검"), .text("같은 이름의 정상 기록을 목록으로 확인합니다.")],
+        [.text("고액·특이금액"), .text("30만/50만/100만 이상, 빠른선택 외 금액, 만원 단위가 아닌 금액을 확인합니다.")],
+        [.text("취소·삭제 이력"), .text("취소, 복구, 삭제 등 잘못 입력한 기록의 정정 흐름을 추적합니다.")]
     ]
 }
 
@@ -420,7 +536,7 @@ private func createXLSXPackage(
     try fileManager.createDirectory(at: xlRelsURL, withIntermediateDirectories: true)
 
     let lastRow = max(entries.count + 1, 2)
-    let sheetNames = ["전체내역", "요약", "검색용", "모임별", "시간대별", "동명이인", "수정이력", "안내"]
+    let sheetNames = ["전체내역", "요약", "검색용", "봉투 검수", "현금·계좌 정산", "식권 검수", "동명이인 점검", "고액·특이금액", "취소·삭제 이력", "안내"]
     let definedNames = """
     <definedName name="전체내역_이름">'전체내역'!$B$2:$B$\(lastRow)</definedName>
     <definedName name="전체내역_모임">'전체내역'!$C$2:$C$\(lastRow)</definedName>
@@ -446,9 +562,9 @@ private func createXLSXPackage(
                 .init(index: 1, width: 10), .init(index: 2, width: 14), .init(index: 3, width: 16), .init(index: 4, width: 16),
                 .init(index: 5, width: 13), .init(index: 6, width: 10), .init(index: 7, width: 10), .init(index: 8, width: 10),
                 .init(index: 9, width: 9), .init(index: 10, width: 21), .init(index: 11, width: 0, hidden: true), .init(index: 12, width: 21),
-                .init(index: 13, width: 13), .init(index: 14, width: 9), .init(index: 15, width: 28)
+                .init(index: 13, width: 13), .init(index: 14, width: 28)
             ],
-            autoFilter: "A1:O\(lastRow)",
+            autoFilter: "A1:N\(lastRow)",
             conditionalFormatting: detailConditionalFormatting
         ),
         worksheetXML(
@@ -457,25 +573,33 @@ private func createXLSXPackage(
         ),
         worksheetXML(
             rows: searchRows(lastRow: lastRow),
-            columns: (1...15).map { .init(index: $0, width: $0 == 15 ? 28 : 14) },
+            columns: (1...14).map { .init(index: $0, width: $0 == 11 ? 0 : ($0 == 14 ? 28 : 14), hidden: $0 == 11) },
             frozenRows: 15,
             dataValidations: searchValidations
         ),
         worksheetXML(
-            rows: groupRows(summary: summary, lastRow: lastRow),
-            columns: [.init(index: 1, width: 18), .init(index: 2, width: 10), .init(index: 3, width: 14), .init(index: 4, width: 10), .init(index: 5, width: 14)],
-            autoFilter: "A1:E\(max(summary.groupTotals.count + 1, 2))"
+            rows: envelopeReviewRows(entries: entries, summary: summary, auditRows: rawAuditRows),
+            columns: [.init(index: 1, width: 18), .init(index: 2, width: 18), .init(index: 3, width: 24), .init(index: 4, width: 14), .init(index: 5, width: 44), .init(index: 6, width: 28)]
         ),
         worksheetXML(
-            rows: hourlyRows(lastRow: lastRow),
-            columns: [.init(index: 1, width: 10), .init(index: 2, width: 10), .init(index: 3, width: 14), .init(index: 4, width: 10)]
+            rows: paymentReviewRows(lastRow: lastRow),
+            columns: [.init(index: 1, width: 18), .init(index: 2, width: 14), .init(index: 3, width: 16), .init(index: 4, width: 14), .init(index: 5, width: 28)]
         ),
         worksheetXML(
-            rows: duplicateRows(summary: summary, lastRow: lastRow),
-            columns: [.init(index: 1, width: 14), .init(index: 2, width: 10), .init(index: 3, width: 14), .init(index: 4, width: 10), .init(index: 5, width: 24)]
+            rows: ticketReviewRows(entries: entries, lastRow: lastRow, settings: settings),
+            columns: [.init(index: 1, width: 16), .init(index: 2, width: 14), .init(index: 3, width: 18), .init(index: 4, width: 12), .init(index: 5, width: 12), .init(index: 6, width: 21)]
         ),
         worksheetXML(
-            rows: auditRows(rawAuditRows),
+            rows: duplicateReviewRows(entries: entries, summary: summary),
+            columns: [.init(index: 1, width: 14), .init(index: 2, width: 10), .init(index: 3, width: 10), .init(index: 4, width: 16), .init(index: 5, width: 16), .init(index: 6, width: 14), .init(index: 7, width: 10), .init(index: 8, width: 10), .init(index: 9, width: 21), .init(index: 10, width: 28)],
+            autoFilter: "A1:J\(max(entries.count + 1, 2))"
+        ),
+        worksheetXML(
+            rows: amountReviewRows(entries: entries, lastRow: lastRow),
+            columns: [.init(index: 1, width: 16), .init(index: 2, width: 16), .init(index: 3, width: 14), .init(index: 4, width: 18), .init(index: 5, width: 12), .init(index: 6, width: 21), .init(index: 7, width: 28)]
+        ),
+        worksheetXML(
+            rows: correctionAuditRows(rawAuditRows),
             columns: [.init(index: 1, width: 21), .init(index: 2, width: 10), .init(index: 3, width: 14), .init(index: 4, width: 12), .init(index: 5, width: 18), .init(index: 6, width: 44), .init(index: 7, width: 44)],
             autoFilter: "A1:G\(max(rawAuditRows.count + 1, 2))"
         ),
