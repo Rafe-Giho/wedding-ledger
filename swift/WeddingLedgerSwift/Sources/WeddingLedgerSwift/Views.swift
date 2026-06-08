@@ -1185,79 +1185,6 @@ struct ClosingCheckItem: View {
     }
 }
 
-struct SettlementFocusGrid: View {
-    @EnvironmentObject private var state: AppState
-    @Binding var section: SectionKey
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 12)], spacing: 12) {
-            SettlementCheckCard(
-                title: "봉투 대조",
-                value: "\(state.summary.activeCount)개",
-                detail: envelopeDetail,
-                symbol: "envelope.open"
-            )
-            SettlementCheckCard(
-                title: "식권 대조",
-                value: "\(state.summary.totalTickets)매",
-                detail: ticketDetail,
-                symbol: "ticket"
-            )
-            SettlementCheckCard(
-                title: "현금 확인",
-                value: formatWon(state.summary.paymentTotals[.cash] ?? 0),
-                detail: "실물 현금과 반드시 대조",
-                symbol: "banknote"
-            )
-            SettlementCheckCard(
-                title: "계좌 확인",
-                value: formatWon(state.summary.paymentTotals[.transfer] ?? 0),
-                detail: "계좌 입금 내역과 대조",
-                symbol: "creditcard"
-            )
-            SettlementCheckCard(
-                title: "누락 봉투",
-                value: state.summary.envelopeGaps.isEmpty ? "없음" : "\(state.summary.envelopeGaps.count)개",
-                detail: state.summary.envelopeGaps.prefix(6).map(String.init).joined(separator: ", "),
-                symbol: "number"
-            )
-            Button {
-                if let duplicate = state.summary.duplicateNames.first {
-                    state.filterDuplicateName(duplicate.name)
-                    section = .search
-                }
-            } label: {
-                SettlementCheckCard(
-                    title: "동명이인",
-                    value: state.summary.duplicateNames.isEmpty ? "없음" : "\(state.summary.duplicateNames.count)건",
-                    detail: duplicateDetail,
-                    symbol: "person.2"
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(state.summary.duplicateNames.isEmpty)
-        }
-    }
-
-    private var envelopeDetail: String {
-        let expected = state.operationSettings.expectedEnvelopeCount
-        guard expected > 0 else { return "예상 봉투수를 설정하면 차이 표시" }
-        return "예상 \(expected)개 ㅣ 차이 \(expected - state.summary.activeCount)개"
-    }
-
-    private var ticketDetail: String {
-        let total = state.operationSettings.totalMealTickets
-        guard total > 0 else { return "총 식권수를 설정하면 남은 매수 표시" }
-        return "준비 \(total)매 ㅣ 남은 \(max(0, total - state.summary.totalTickets))매"
-    }
-
-    private var duplicateDetail: String {
-        state.summary.duplicateNames.isEmpty
-            ? "같은 이름 없음"
-            : state.summary.duplicateNames.prefix(2).map { "\($0.name) \($0.count)명" }.joined(separator: ", ")
-    }
-}
-
 struct SettlementCheckCard: View {
     let title: String
     let value: String
@@ -1322,12 +1249,6 @@ struct DuplicateNameFilterRow: View {
             }
         }
     }
-}
-
-private func duplicateSummaryText(_ duplicates: [DuplicateName]) -> String {
-    guard !duplicates.isEmpty else { return "없음" }
-    let names = duplicates.prefix(2).map { "\($0.name) \($0.count)명" }.joined(separator: ", ")
-    return duplicates.count > 2 ? "\(names) 외 \(duplicates.count - 2)건" : names
 }
 
 struct SettingsView: View {

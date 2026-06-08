@@ -155,35 +155,6 @@ struct StatCard: View {
     }
 }
 
-struct SummaryTile: View {
-    let title: String
-    let value: String
-
-    init(_ title: String, _ value: String) {
-        self.title = title
-        self.value = value
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.muted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            Text(value)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(AppColors.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
-        .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.line.opacity(0.5)))
-    }
-}
-
 struct ModePill: View {
     let title: String
 
