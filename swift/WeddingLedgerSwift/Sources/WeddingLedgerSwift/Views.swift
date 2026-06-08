@@ -930,7 +930,7 @@ struct SummaryView: View {
                 Text("최근 입력: \(latestEntryTime)")
                     .font(.footnote)
                     .foregroundStyle(AppColors.muted)
-                SummaryOverviewSection(section: $section)
+                SummaryOverviewSection(section: $section, layout: layout)
                 ClosingChecklistCard(section: $section)
                     .frame(maxHeight: .infinity, alignment: .topLeading)
             }
@@ -950,6 +950,7 @@ struct SummaryView: View {
 struct SummaryOverviewSection: View {
     @EnvironmentObject private var state: AppState
     @Binding var section: SectionKey
+    let layout: ResponsiveLayout
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -962,12 +963,18 @@ struct SummaryOverviewSection: View {
                     .foregroundStyle(AppColors.muted)
                 Spacer()
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 218), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 SettlementCheckCard(
                     title: "총 축의금",
                     value: formatWon(state.summary.totalAmount),
                     detail: "정상 \(state.summary.activeCount)건 · 취소 \(state.summary.voidCount)건",
                     symbol: "wonsign"
+                )
+                SettlementCheckCard(
+                    title: "평균 축의금",
+                    value: formatWon(averageAmount),
+                    detail: state.summary.activeCount == 0 ? "정상 기록 기준" : "\(state.summary.activeCount)건 평균",
+                    symbol: "divide.circle"
                 )
                 SettlementCheckCard(
                     title: "입금 방식",
@@ -1008,6 +1015,22 @@ struct SummaryOverviewSection: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(AppColors.field.opacity(0.58), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppColors.line.opacity(0.45), lineWidth: 1))
+    }
+
+    private var columns: [GridItem] {
+        switch layout {
+        case .expanded:
+            Array(repeating: GridItem(.flexible(minimum: 190), spacing: 12), count: 3)
+        case .medium:
+            Array(repeating: GridItem(.flexible(minimum: 180), spacing: 12), count: 2)
+        case .compact:
+            [GridItem(.adaptive(minimum: 180), spacing: 12)]
+        }
+    }
+
+    private var averageAmount: Int {
+        guard state.summary.activeCount > 0 else { return 0 }
+        return state.summary.totalAmount / state.summary.activeCount
     }
 
     private var paymentHeadline: String {
