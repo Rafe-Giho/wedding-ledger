@@ -21,7 +21,7 @@ trap cleanup EXIT
 echo "축의대 장부 ${VERSION} 설치를 시작합니다."
 mkdir -p "$INSTALL_DIR"
 
-curl -L --fail --progress-bar "$URL" -o "$TMP_DIR/$ASSET"
+curl -fL --retry 5 --retry-delay 2 --progress-bar "$URL" -o "$TMP_DIR/$ASSET"
 ditto -x -k "$TMP_DIR/$ASSET" "$TMP_DIR"
 
 if [ ! -d "$TMP_DIR/$APP_NAME" ]; then
