@@ -453,13 +453,13 @@ struct ThemePreferenceControl: View {
     let compact: Bool
 
     var body: some View {
-        Picker("화면 테마", selection: Binding(get: { state.themePreference }, set: { state.setTheme($0) })) {
-            ForEach(ThemePreference.allCases) { preference in
-                Text(compact ? preference.shortLabel : preference.label).tag(preference)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        AppSegmentedControl(
+            selection: Binding(get: { state.themePreference }, set: { state.setTheme($0) }),
+            options: ThemePreference.allCases.map { preference in
+                (value: preference, title: preference.label)
+            },
+            compact: compact
+        )
         .frame(width: compact ? 168 : 184)
     }
 }
@@ -1323,13 +1323,13 @@ struct SettingsView: View {
                     ThemePreferenceControl(compact: layout == .compact)
                 }
                 SettingsRow(title: "현재 모드") {
-                    Picker("현재 모드", selection: Binding(get: { state.mode }, set: { state.switchMode($0) })) {
-                        ForEach(LedgerMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    AppSegmentedControl(
+                        selection: Binding(get: { state.mode }, set: { state.switchMode($0) }),
+                        options: LedgerMode.allCases.map { mode in
+                            (value: mode, title: mode.label)
+                        },
+                        compact: layout == .compact
+                    )
                     .frame(width: 180)
                 }
                 OperationSettingsPanel()

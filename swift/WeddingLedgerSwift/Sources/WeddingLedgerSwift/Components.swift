@@ -216,6 +216,37 @@ struct ModePill: View {
     }
 }
 
+struct AppSegmentedControl<Value: Equatable>: View {
+    @Binding var selection: Value
+    let options: [(value: Value, title: String)]
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                let selected = option.value == selection
+                Button {
+                    selection = option.value
+                } label: {
+                    Text(option.title)
+                        .font(.system(size: compact ? 12 : 13, weight: .semibold))
+                        .foregroundStyle(selected ? AppColors.text : AppColors.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, compact ? 5 : 6)
+                        .padding(.horizontal, compact ? 8 : 10)
+                        .background(selected ? AppColors.goldSoft : Color.clear, in: Capsule())
+                        .overlay(Capsule().stroke(selected ? AppColors.gold.opacity(0.58) : Color.clear, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .contentShape(Capsule())
+            }
+        }
+        .padding(4)
+        .background(AppColors.field.opacity(0.82), in: Capsule())
+        .overlay(Capsule().stroke(AppColors.lineSoft.opacity(0.62), lineWidth: 1))
+    }
+}
+
 private func rgb(_ red: Double, _ green: Double, _ blue: Double) -> NSColor {
     NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1)
 }
