@@ -82,6 +82,7 @@ struct EntryDraft {
     var amountText = ""
     var mealTicketCount = 0
     var paymentMethod: PaymentMethod = .cash
+    var createdAtText = ""
     var memo = ""
 
     var amount: Int { parseAmount(amountText) }

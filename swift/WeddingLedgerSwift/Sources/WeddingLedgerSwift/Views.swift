@@ -553,7 +553,29 @@ struct EntryFormView: View {
                         }
                     }
                     .labelsHidden()
+                    .onChange(of: state.draft.paymentMethod) { _, method in
+                        if method == .transfer, state.draft.createdAtText.isEmpty {
+                            state.draft.createdAtText = nowString()
+                        } else if method != .transfer {
+                            state.draft.createdAtText = ""
+                        }
+                    }
                 }
+            }
+            if state.draft.paymentMethod == .transfer {
+                FieldLabel("입금시간") {
+                    HStack(spacing: 10) {
+                        TextField("YYYY-MM-DD HH:mm:ss 또는 HH:mm:ss", text: $state.draft.createdAtText)
+                            .textFieldStyle(.plain)
+                        Button("현재") {
+                            state.draft.createdAtText = nowString()
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Text("계좌 입금은 실제 입금 시각을 수정할 수 있습니다. 당일은 HH:mm:ss만 입력해도 됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(AppColors.muted)
             }
             AdaptivePair(stacked: compact) {
                 FieldLabel("모임") {

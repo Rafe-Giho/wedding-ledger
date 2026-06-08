@@ -237,7 +237,7 @@ final class LedgerStore {
     func createEntry(_ draft: EntryDraft, mode: LedgerMode) throws -> LedgerEntry {
         let clean = try validateDraft(draft, mode: mode)
         let id = UUID().uuidString
-        let createdAt = nowString()
+        let createdAt = try createdAtString(for: clean)
         do {
             try db.execute(
                 """
@@ -503,6 +503,17 @@ final class LedgerStore {
         if clean.mealTicketCount < 0 { throw LedgerError.invalid("식권 수는 0 이상이어야 합니다.") }
         if clean.groupName.isEmpty { clean.groupName = defaultGroup }
         return clean
+    }
+
+    private func createdAtString(for draft: EntryDraft) throws -> String {
+        let cleanTimestamp = draft.createdAtText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard draft.paymentMethod == .transfer, !cleanTimestamp.isEmpty else {
+            return nowString()
+        }
+        guard let normalized = normalizedLedgerTimestamp(cleanTimestamp) else {
+            throw LedgerError.invalid("입금시간은 YYYY-MM-DD HH:mm:ss 또는 HH:mm:ss 형식으로 입력해 주세요.")
+        }
+        return normalized
     }
 
     private func getEntry(id: String) throws -> LedgerEntry? {

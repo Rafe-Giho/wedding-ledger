@@ -91,3 +91,60 @@ func nowString() -> String {
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     return formatter.string(from: Date())
 }
+
+func normalizedLedgerTimestamp(_ value: String) -> String? {
+    guard let date = parseLedgerTimestamp(value) else { return nil }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    return formatter.string(from: date)
+}
+
+func ledgerClockText(_ value: String) -> String {
+    guard let date = parseLedgerTimestamp(value) else { return value }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "HH:mm:ss"
+    return formatter.string(from: date)
+}
+
+func ledgerDateText(_ value: String) -> String {
+    guard let date = parseLedgerTimestamp(value) else { return "" }
+    if Calendar.current.isDateInToday(date) { return "오늘" }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "MM-dd"
+    return formatter.string(from: date)
+}
+
+private func parseLedgerTimestamp(_ value: String) -> Date? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.timeZone = .current
+
+    for format in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm"] {
+        formatter.dateFormat = format
+        if let date = formatter.date(from: trimmed) { return date }
+    }
+
+    for format in ["HH:mm:ss", "HH:mm"] {
+        formatter.dateFormat = format
+        if let time = formatter.date(from: trimmed) {
+            let timeParts = Calendar.current.dateComponents([.hour, .minute, .second], from: time)
+            let today = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+            return Calendar.current.date(from: DateComponents(
+                year: today.year,
+                month: today.month,
+                day: today.day,
+                hour: timeParts.hour,
+                minute: timeParts.minute,
+                second: timeParts.second ?? 0
+            ))
+        }
+    }
+
+    return nil
+}
