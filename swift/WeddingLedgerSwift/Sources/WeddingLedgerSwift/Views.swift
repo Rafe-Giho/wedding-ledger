@@ -1700,18 +1700,16 @@ struct EntryTable: View {
                     .width(min: 48, ideal: 56, max: 64)
                 TableColumn("이름") { Text($0.name).lineLimit(1) }
                     .width(min: 78, ideal: 100, max: 150)
-                TableColumn("모임") { Text($0.groupName).lineLimit(1) }
-                    .width(min: 78, ideal: 108, max: 150)
-                TableColumn("관계") { Text($0.relationship.isEmpty ? "-" : $0.relationship).lineLimit(1) }
-                    .width(min: 64, ideal: 88, max: 130)
+                TableColumn("분류") { EntryCategoryCell(entry: $0) }
+                    .width(min: 112, ideal: 142, max: 190)
                 TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
                     .width(min: 92, ideal: 112, max: 132)
                 TableColumn("식권") { Text("\($0.mealTicketCount)").monospacedDigit() }
                     .width(min: 44, ideal: 52, max: 60)
                 TableColumn("방식") { Text($0.paymentMethod.label) }
                     .width(min: 48, ideal: 56, max: 64)
-                TableColumn("상태") { EntryStatusCell(entry: $0) }
-                    .width(min: 74, ideal: 84, max: 96)
+                TableColumn("상태") { EntryStatusBadge(status: $0.status) }
+                    .width(min: 54, ideal: 62, max: 72)
                 TableColumn("시간") { EntryTimeCell(timestamp: $0.createdAt) }
                     .width(min: 84, ideal: 94, max: 108)
                 TableColumn("메모") { entry in
@@ -1721,22 +1719,42 @@ struct EntryTable: View {
                         .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
                 }
                 .width(min: 120, ideal: 180, max: 280)
+                TableColumn("관리") { EntryStatusButton(entry: $0) }
+                    .width(min: 58, ideal: 68, max: 78)
             }
             .frame(minHeight: 220, maxHeight: .infinity)
         }
     }
 }
 
-struct EntryStatusCell: View {
+struct EntryCategoryCell: View {
     let entry: LedgerEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(entry.status.label)
+            Text(entry.groupName)
                 .font(.caption)
                 .foregroundStyle(AppColors.text)
-            EntryStatusButton(entry: entry)
+                .lineLimit(1)
+            Text(entry.relationship.isEmpty ? "-" : entry.relationship)
+                .font(.caption2)
+                .foregroundStyle(AppColors.muted)
+                .lineLimit(1)
         }
+    }
+}
+
+struct EntryStatusBadge: View {
+    let status: EntryStatus
+
+    var body: some View {
+        Text(status.label)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(status == .active ? AppColors.text : AppColors.danger)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(status == .active ? AppColors.goldSoft.opacity(0.72) : AppColors.danger.opacity(0.12), in: Capsule())
+            .overlay(Capsule().stroke(status == .active ? AppColors.line : AppColors.danger.opacity(0.35), lineWidth: 1))
     }
 }
 
