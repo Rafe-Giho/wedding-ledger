@@ -45,7 +45,6 @@ enum PaymentMethod: String, CaseIterable, Identifiable {
 }
 
 enum ThemePreference: String, CaseIterable, Identifiable {
-    case system
     case light
     case dark
 
@@ -53,7 +52,6 @@ enum ThemePreference: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .system: "시스템 설정"
         case .light: "라이트"
         case .dark: "다크"
         }

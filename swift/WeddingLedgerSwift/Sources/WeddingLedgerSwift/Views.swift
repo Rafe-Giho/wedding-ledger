@@ -1924,7 +1924,6 @@ struct SettingsActionButton: View {
 private extension ThemePreference {
     var shortLabel: String {
         switch self {
-        case .system: "시스템"
         case .light: "라이트"
         case .dark: "다크"
         }

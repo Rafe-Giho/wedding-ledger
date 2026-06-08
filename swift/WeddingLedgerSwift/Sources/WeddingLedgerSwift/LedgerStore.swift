@@ -182,7 +182,7 @@ final class LedgerStore {
     }
 
     func themePreference() -> ThemePreference {
-        ThemePreference(rawValue: getSetting("theme_preference") ?? "") ?? .system
+        ThemePreference(rawValue: getSetting("theme_preference") ?? "") ?? .dark
     }
 
     func setThemePreference(_ preference: ThemePreference) throws {

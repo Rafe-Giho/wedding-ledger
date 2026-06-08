@@ -7,7 +7,7 @@ final class AppState: ObservableObject {
     @Published var isConfigured = false
     @Published var isUnlocked = false
     @Published var mode: LedgerMode = .test
-    @Published var themePreference: ThemePreference = .system
+    @Published var themePreference: ThemePreference = .dark
     @Published var appearanceRevision = 0
     @Published var draft = EntryDraft(envelopeNo: 1)
     @Published var recentEntries: [LedgerEntry] = []
@@ -149,8 +149,6 @@ final class AppState: ObservableObject {
 
     private func applyAppearance(_ preference: ThemePreference) {
         switch preference {
-        case .system:
-            NSApp.appearance = nil
         case .light:
             NSApp.appearance = NSAppearance(named: .aqua)
         case .dark:
@@ -277,9 +275,8 @@ final class AppState: ObservableObject {
 }
 
 extension ThemePreference {
-    var colorScheme: ColorScheme? {
+    var colorScheme: ColorScheme {
         switch self {
-        case .system: nil
         case .light: .light
         case .dark: .dark
         }
