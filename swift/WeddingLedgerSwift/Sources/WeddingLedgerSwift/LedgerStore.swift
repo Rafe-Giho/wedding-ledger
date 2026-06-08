@@ -386,6 +386,13 @@ final class LedgerStore {
         try insertAudit(entryID: id, action: "restore", before: before, after: try getEntry(id: id), reason: reason)
     }
 
+    func deleteEntry(id: String, reason: String) throws {
+        guard let before = try getEntry(id: id) else { throw LedgerError.notFound }
+        try insertAudit(entryID: id, action: "delete", before: before, after: nil, reason: reason)
+        try db.execute("UPDATE audit_logs SET entry_id = NULL WHERE entry_id = ?", [.text(id)])
+        try db.execute("DELETE FROM entries WHERE id = ?", [.text(id)])
+    }
+
     @discardableResult
     func createBackup(label: String = "auto") throws -> URL {
         let formatter = DateFormatter()
@@ -410,6 +417,12 @@ final class LedgerStore {
             var output: [String: String] = [:]
             for (key, value) in row {
                 output[key] = value.string
+            }
+            if output["envelope_no", default: ""].isEmpty {
+                output["envelope_no"] = auditJSONValue(row, key: "envelope_no")
+            }
+            if output["name", default: ""].isEmpty {
+                output["name"] = auditJSONValue(row, key: "name")
             }
             return output
         }
@@ -620,6 +633,21 @@ final class LedgerStore {
             """,
             [.text(UUID().uuidString), entryID.map(SQLiteValue.text) ?? .null, .text(action), beforeJSON.map(SQLiteValue.text) ?? .null, afterJSON.map(SQLiteValue.text) ?? .null, .text(reason), .text(nowString())]
         )
+    }
+
+    private func auditJSONValue(_ row: [String: SQLiteValue], key: String) -> String {
+        for column in ["before_json", "after_json"] {
+            let json = row[column]?.string ?? ""
+            guard
+                let data = json.data(using: .utf8),
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let value = object[key]
+            else {
+                continue
+            }
+            return String(describing: value)
+        }
+        return ""
     }
 
     private func jsonForEntry(_ entry: LedgerEntry) throws -> String {

@@ -23,17 +23,18 @@
 - `(mode, envelope_no)`는 중복될 수 없다.
 - `amount`는 0보다 커야 한다.
 - `meal_ticket_count`는 0 이상이어야 한다.
-- 삭제하지 않고 `status=void`로 취소 처리한다.
+- 운영 중 정정은 기본적으로 `status=void` 취소 처리한다.
+- 잘못 저장한 개별 기록은 확인 후 삭제할 수 있으며, 삭제 전 값은 감사 로그에 남긴다.
 
 ## audit_logs
 
-수정, 취소, 복구 이력을 저장한다.
+수정, 취소, 복구, 삭제 이력을 저장한다.
 
 | 컬럼 | 타입 | 설명 |
 | --- | --- | --- |
 | id | TEXT | UUID |
 | entry_id | TEXT | 대상 기록 |
-| action | TEXT | create, update, void, restore |
+| action | TEXT | create, update, void, restore, delete |
 | before_json | TEXT | 변경 전 값 |
 | after_json | TEXT | 변경 후 값 |
 | reason | TEXT | 사유 |

@@ -272,6 +272,16 @@ final class AppState: ObservableObject {
             message = error.localizedDescription
         }
     }
+
+    func deleteEntry(_ entry: LedgerEntry) {
+        do {
+            try store.deleteEntry(id: entry.id, reason: "Swift 앱에서 삭제")
+            message = "봉투 #\(entry.envelopeNo) \(entry.name) 기록을 삭제했습니다."
+            refresh()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
 }
 
 extension ThemePreference {

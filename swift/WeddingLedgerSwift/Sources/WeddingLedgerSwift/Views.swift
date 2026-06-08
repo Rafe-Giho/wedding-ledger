@@ -871,7 +871,7 @@ struct SearchView: View {
                     state.filterDuplicateName(duplicate.name)
                     filters = state.searchFilters
                 }
-                EntryTable(entries: state.searchResults, compact: layout == .compact)
+                EntryTable(entries: state.searchResults, compact: layout == .compact, allowsManagement: true)
                     .frame(minHeight: layout == .compact ? nil : 220, maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
@@ -1687,6 +1687,7 @@ struct RecoveryKeyView: View {
 struct EntryTable: View {
     let entries: [LedgerEntry]
     let compact: Bool
+    var allowsManagement = false
 
     var body: some View {
         if entries.isEmpty {
@@ -1696,7 +1697,7 @@ struct EntryTable: View {
         } else if compact {
             VStack(spacing: 0) {
                 ForEach(entries) { entry in
-                    EntryCompactRow(entry: entry)
+                    EntryCompactRow(entry: entry, allowsManagement: allowsManagement)
                     if entry.id != entries.last?.id {
                         Divider().background(AppColors.lineSoft)
                     }
@@ -1729,8 +1730,8 @@ struct EntryTable: View {
                         .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
                 }
                 .width(min: 120, ideal: 180, max: 280)
-                TableColumn("관리") { EntryStatusButton(entry: $0) }
-                    .width(min: 58, ideal: 68, max: 78)
+                TableColumn("관리") { EntryManagementActions(entry: $0, compact: false) }
+                    .width(min: 112, ideal: 124, max: 142)
             }
             .frame(minHeight: 220, maxHeight: .infinity)
         }
@@ -1786,58 +1787,83 @@ struct EntryTimeCell: View {
 
 struct EntryCompactRow: View {
     let entry: LedgerEntry
+    var allowsManagement = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text("#\(entry.envelopeNo)")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(AppColors.gold)
-                .frame(width: 48, alignment: .leading)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(entry.name)
-                    .font(.headline)
-                    .foregroundStyle(AppColors.text)
-                Text([entry.groupName, entry.relationship].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.subheadline)
-                    .foregroundStyle(AppColors.muted)
-                if !entry.memo.isEmpty {
-                    Text(entry.memo)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                Text("#\(entry.envelopeNo)")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColors.gold)
+                    .frame(width: 48, alignment: .leading)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.name)
+                        .font(.headline)
+                        .foregroundStyle(AppColors.text)
+                    Text([entry.groupName, entry.relationship].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.subheadline)
+                        .foregroundStyle(AppColors.muted)
+                    if !entry.memo.isEmpty {
+                        Text(entry.memo)
+                            .font(.caption)
+                            .foregroundStyle(AppColors.muted)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(formatWon(entry.amount))
+                        .font(.headline)
+                        .foregroundStyle(AppColors.gold)
+                    Text("식권 \(entry.mealTicketCount)매")
                         .font(.caption)
                         .foregroundStyle(AppColors.muted)
-                        .lineLimit(2)
+                    Text(ledgerClockText(entry.createdAt))
+                        .font(.caption2)
+                        .foregroundStyle(AppColors.muted)
+                        .help(entry.createdAt)
                 }
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(formatWon(entry.amount))
-                    .font(.headline)
-                    .foregroundStyle(AppColors.gold)
-                Text("식권 \(entry.mealTicketCount)매")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.muted)
-                Text(ledgerClockText(entry.createdAt))
-                    .font(.caption2)
-                    .foregroundStyle(AppColors.muted)
-                    .help(entry.createdAt)
+            if allowsManagement {
+                EntryManagementActions(entry: entry, compact: true)
             }
         }
         .padding(16)
     }
 }
 
-struct EntryStatusButton: View {
+struct EntryManagementActions: View {
     @EnvironmentObject private var state: AppState
+    @State private var confirmsDelete = false
     let entry: LedgerEntry
+    let compact: Bool
 
     var body: some View {
-        Button(entry.status == .active ? "취소" : "복구") {
-            if entry.status == .active {
-                state.voidEntry(entry)
-            } else {
-                state.restoreEntry(entry)
+        HStack(spacing: compact ? 8 : 6) {
+            Button(entry.status == .active ? "취소" : "복구") {
+                if entry.status == .active {
+                    state.voidEntry(entry)
+                } else {
+                    state.restoreEntry(entry)
+                }
             }
+            .buttonStyle(.borderless)
+
+            Button("삭제", role: .destructive) {
+                confirmsDelete = true
+            }
+            .buttonStyle(.borderless)
         }
-        .buttonStyle(.borderless)
+        .font(.system(size: compact ? 13 : 12, weight: .semibold))
+        .frame(maxWidth: compact ? .infinity : nil, alignment: compact ? .trailing : .center)
+        .confirmationDialog("기록을 삭제할까요?", isPresented: $confirmsDelete, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) {
+                state.deleteEntry(entry)
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("봉투 #\(entry.envelopeNo) \(entry.name) 기록은 검색과 정산에서 제거됩니다. 삭제 이력은 수정이력에 남습니다.")
+        }
     }
 }
 
