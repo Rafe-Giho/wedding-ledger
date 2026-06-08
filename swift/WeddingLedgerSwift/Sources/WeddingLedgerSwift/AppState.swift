@@ -232,10 +232,11 @@ final class AppState: ObservableObject {
     }
 
     func openLastExportLocation() {
-        guard let lastExportURL else { return }
+        guard let lastExportURL else {
+            message = "먼저 엑셀 추출을 완료해 주세요."
+            return
+        }
         NSWorkspace.shared.activateFileViewerSelecting([lastExportURL])
-        self.lastExportURL = nil
-        message = ""
     }
 
     func restoreBackup(from url: URL) {

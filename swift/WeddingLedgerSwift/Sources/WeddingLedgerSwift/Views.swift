@@ -78,11 +78,8 @@ struct RootView: View {
                 AuthView()
             }
         }
-        .alert("알림", isPresented: Binding(get: { !state.message.isEmpty }, set: { if !$0 { clearMessage() } })) {
-            if state.lastExportURL != nil {
-                Button("위치 열기") { state.openLastExportLocation() }
-            }
-            Button("확인") { clearMessage() }
+        .alert("알림", isPresented: Binding(get: { !state.message.isEmpty }, set: { if !$0 { state.message = "" } })) {
+            Button("확인") { state.message = "" }
         } message: {
             Text(state.message)
         }
@@ -92,11 +89,6 @@ struct RootView: View {
         )) { sheet in
             RecoveryKeyView(recoveryKey: sheet.key)
         }
-    }
-
-    private func clearMessage() {
-        state.message = ""
-        state.lastExportURL = nil
     }
 }
 
@@ -642,11 +634,11 @@ struct EntryFormView: View {
                     .foregroundStyle(AppColors.text)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: dense ? 86 : 92), spacing: dense ? 8 : 10)], spacing: dense ? 8 : 10) {
                     ForEach(defaultQuickAmounts, id: \.self) { amount in
-                        PillButton(formatNumber(amount)) {
+                        QuickAmountButton(formatNumber(amount)) {
                             state.draft.amountText = formatNumber(amount)
                         }
                     }
-                    PillButton("+1만원", outlined: true) {
+                    QuickAmountButton("+1만원", outlined: true) {
                         state.draft.amountText = formatNumber(state.draft.amount + 10_000)
                     }
                 }
@@ -1378,6 +1370,7 @@ struct SettingsView: View {
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 12)], spacing: 12) {
                     SettingsActionButton("엑셀 추출") { exportExcel() }
+                    SettingsActionButton("위치 열기") { state.openLastExportLocation() }
                     SettingsActionButton("수동 백업 생성") { state.createBackup() }
                     SettingsActionButton("백업 복원") { restoreBackup() }
                     SettingsActionButton("테스트 데이터 초기화", destructive: true) { confirmTest = true }
@@ -1748,7 +1741,7 @@ struct EntryTable: View {
     let entries: [LedgerEntry]
     let compact: Bool
     var allowsManagement = false
-    @State private var sortState = EntrySortState()
+    @State private var sortOrder: [KeyPathComparator<LedgerEntry>] = []
 
     var body: some View {
         if entries.isEmpty {
@@ -1767,279 +1760,65 @@ struct EntryTable: View {
             .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.lineSoft, lineWidth: 1))
         } else {
-            EntryTableGrid(entries: sortedEntries, sortState: $sortState, allowsManagement: allowsManagement)
-        }
-    }
-
-    private var sortedEntries: [LedgerEntry] {
-        sortEntries(entries, by: sortState)
-    }
-}
-
-private enum EntrySortColumn: Equatable {
-    case envelope
-    case name
-    case category
-    case amount
-    case tickets
-    case payment
-    case status
-    case time
-    case memo
-}
-
-private enum EntrySortDirection {
-    case ascending
-    case descending
-}
-
-private struct EntrySortState {
-    var column: EntrySortColumn?
-    var direction: EntrySortDirection?
-
-    mutating func cycle(_ target: EntrySortColumn) {
-        if column != target {
-            column = target
-            direction = .ascending
-            return
-        }
-        switch direction {
-        case .ascending:
-            direction = .descending
-        case .descending:
-            column = nil
-            direction = nil
-        case nil:
-            direction = .ascending
-        }
-    }
-
-    func direction(for target: EntrySortColumn) -> EntrySortDirection? {
-        column == target ? direction : nil
-    }
-}
-
-private struct EntryTableWidths {
-    let envelope: CGFloat = 58
-    let name: CGFloat = 96
-    let category: CGFloat = 122
-    let amount: CGFloat = 114
-    let tickets: CGFloat = 56
-    let payment: CGFloat = 62
-    let status: CGFloat = 68
-    let time: CGFloat = 98
-    let memo: CGFloat
-    let management: CGFloat
-
-    init(totalWidth: CGFloat, allowsManagement: Bool) {
-        management = allowsManagement ? 126 : 0
-        let fixed = envelope + name + category + amount + tickets + payment + status + time + management
-        memo = max(104, totalWidth - fixed)
-    }
-
-    var contentWidth: CGFloat {
-        envelope + name + category + amount + tickets + payment + status + time + memo + management
-    }
-}
-
-private struct EntryTableGrid: View {
-    let entries: [LedgerEntry]
-    @Binding var sortState: EntrySortState
-    let allowsManagement: Bool
-
-    var body: some View {
-        GeometryReader { proxy in
-            let widths = EntryTableWidths(totalWidth: proxy.size.width, allowsManagement: allowsManagement)
-            ScrollView(.horizontal) {
-                VStack(spacing: 0) {
-                    EntryTableHeader(widths: widths, allowsManagement: allowsManagement, sortState: $sortState)
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                                EntryTableDataRow(entry: entry, index: index, widths: widths, allowsManagement: allowsManagement)
-                            }
-                        }
-                    }
-                    .scrollIndicators(.visible)
+            Table(displayedEntries, sortOrder: $sortOrder) {
+                TableColumn("봉투", value: \.envelopeNo) { Text("\($0.envelopeNo)").monospacedDigit() }
+                    .width(min: 48, ideal: 56, max: 64)
+                TableColumn("이름", value: \.name) { Text($0.name).lineLimit(1) }
+                    .width(min: 78, ideal: 100, max: 150)
+                TableColumn("분류", value: \.sortCategory) { EntryCategoryCell(entry: $0) }
+                    .width(min: 94, ideal: 116, max: 142)
+                TableColumn("금액", value: \.amount) { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
+                    .width(min: 92, ideal: 112, max: 132)
+                TableColumn("식권", value: \.mealTicketCount) { Text("\($0.mealTicketCount)").monospacedDigit() }
+                    .width(min: 44, ideal: 52, max: 60)
+                TableColumn("방식", value: \.sortPaymentMethod) { Text($0.paymentMethod.label) }
+                    .width(min: 48, ideal: 56, max: 64)
+                TableColumn("상태", value: \.sortStatus) { EntryStatusBadge(status: $0.status) }
+                    .width(min: 54, ideal: 62, max: 72)
+                TableColumn("시간", value: \.createdAt) { EntryTimeCell(timestamp: $0.createdAt) }
+                    .width(min: 84, ideal: 94, max: 108)
+                TableColumn("메모", value: \.memo) { entry in
+                    Text(entry.memo.isEmpty ? "-" : entry.memo)
+                        .foregroundStyle(entry.memo.isEmpty ? AppColors.muted : AppColors.text)
+                        .lineLimit(1)
+                        .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
                 }
-                .frame(width: widths.contentWidth, height: proxy.size.height, alignment: .topLeading)
+                .width(min: 90, ideal: 116, max: 160)
+                TableColumn("관리") { EntryManagementActions(entry: $0, compact: false) }
+                    .width(min: 112, ideal: 124, max: 142)
             }
-            .scrollIndicators(.visible, axes: .horizontal)
-        }
-        .frame(minHeight: 220, maxHeight: .infinity)
-        .background(AppColors.field, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.lineSoft, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-private struct EntryTableHeader: View {
-    let widths: EntryTableWidths
-    let allowsManagement: Bool
-    @Binding var sortState: EntrySortState
-
-    var body: some View {
-        HStack(spacing: 0) {
-            EntryTableSortHeader(title: "봉투", column: .envelope, width: widths.envelope, sortState: $sortState)
-            EntryTableSortHeader(title: "이름", column: .name, width: widths.name, sortState: $sortState)
-            EntryTableSortHeader(title: "분류", column: .category, width: widths.category, sortState: $sortState)
-            EntryTableSortHeader(title: "금액", column: .amount, width: widths.amount, sortState: $sortState)
-            EntryTableSortHeader(title: "식권", column: .tickets, width: widths.tickets, sortState: $sortState)
-            EntryTableSortHeader(title: "방식", column: .payment, width: widths.payment, sortState: $sortState)
-            EntryTableSortHeader(title: "상태", column: .status, width: widths.status, sortState: $sortState)
-            EntryTableSortHeader(title: "시간", column: .time, width: widths.time, sortState: $sortState)
-            EntryTableSortHeader(title: "메모", column: .memo, width: widths.memo, sortState: $sortState)
-            if allowsManagement {
-                EntryTablePlainHeader(title: "관리", width: widths.management)
+            .frame(minHeight: 220, maxHeight: .infinity)
+            .onChange(of: sortOrder) { oldValue, newValue in
+                guard
+                    let oldSort = oldValue.first,
+                    let newSort = newValue.first,
+                    oldSort.keyPath == newSort.keyPath,
+                    oldSort.order == .reverse,
+                    newSort.order == .forward
+                else { return }
+                sortOrder = []
             }
         }
-        .frame(height: 36)
-        .background(AppColors.goldSoft.opacity(0.42))
-        .overlay(Rectangle().fill(AppColors.lineSoft).frame(height: 1), alignment: .bottom)
+    }
+
+    private var displayedEntries: [LedgerEntry] {
+        guard !sortOrder.isEmpty else { return entries }
+        return entries.sorted(using: sortOrder)
     }
 }
 
-private struct EntryTableSortHeader: View {
-    let title: String
-    let column: EntrySortColumn
-    let width: CGFloat
-    @Binding var sortState: EntrySortState
-
-    var body: some View {
-        Button {
-            sortState.cycle(column)
-        } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                    .lineLimit(1)
-                Image(systemName: iconName)
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(iconColor)
-            }
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(AppColors.text)
-            .padding(.horizontal, 10)
-            .frame(width: width, height: 36, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("클릭하면 오름차순, 내림차순, 원래 순서로 정렬됩니다.")
-        .overlay(Rectangle().fill(AppColors.lineSoft).frame(width: 1), alignment: .trailing)
+private extension LedgerEntry {
+    var sortCategory: String {
+        [groupName, relationship, targetPerson].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    private var iconName: String {
-        switch sortState.direction(for: column) {
-        case .ascending: "chevron.up"
-        case .descending: "chevron.down"
-        case nil: "arrow.up.arrow.down"
-        }
+    var sortPaymentMethod: String {
+        paymentMethod.label
     }
 
-    private var iconColor: Color {
-        sortState.direction(for: column) == nil ? AppColors.muted.opacity(0.38) : AppColors.gold
+    var sortStatus: String {
+        status.label
     }
-}
-
-private struct EntryTablePlainHeader: View {
-    let title: String
-    let width: CGFloat
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(AppColors.text)
-            .padding(.horizontal, 10)
-            .frame(width: width, height: 36, alignment: .leading)
-    }
-}
-
-private struct EntryTableDataRow: View {
-    let entry: LedgerEntry
-    let index: Int
-    let widths: EntryTableWidths
-    let allowsManagement: Bool
-
-    var body: some View {
-        HStack(spacing: 0) {
-            cell(width: widths.envelope) { Text("\(entry.envelopeNo)").monospacedDigit() }
-            cell(width: widths.name) { Text(entry.name).lineLimit(1) }
-            cell(width: widths.category) { EntryCategoryCell(entry: entry) }
-            cell(width: widths.amount) {
-                Text(formatWon(entry.amount))
-                    .foregroundStyle(AppColors.gold)
-                    .monospacedDigit()
-                    .lineLimit(1)
-            }
-            cell(width: widths.tickets) { Text("\(entry.mealTicketCount)").monospacedDigit() }
-            cell(width: widths.payment) { Text(entry.paymentMethod.label).lineLimit(1) }
-            cell(width: widths.status) { EntryStatusBadge(status: entry.status) }
-            cell(width: widths.time) { EntryTimeCell(timestamp: entry.createdAt) }
-            cell(width: widths.memo) {
-                Text(entry.memo.isEmpty ? "-" : entry.memo)
-                    .foregroundStyle(entry.memo.isEmpty ? AppColors.muted : AppColors.text)
-                    .lineLimit(1)
-                    .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
-            }
-            if allowsManagement {
-                cell(width: widths.management) { EntryManagementActions(entry: entry, compact: false) }
-            }
-        }
-        .font(.system(size: 12))
-        .foregroundStyle(AppColors.text)
-        .frame(height: 52)
-        .background(index.isMultiple(of: 2) ? AppColors.cardStrong.opacity(0.48) : AppColors.card.opacity(0.36))
-        .overlay(Rectangle().fill(AppColors.lineSoft.opacity(0.45)).frame(height: 1), alignment: .bottom)
-    }
-
-    private func cell<Content: View>(width: CGFloat, @ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(.horizontal, 10)
-            .frame(width: width, alignment: .leading)
-            .frame(maxHeight: .infinity, alignment: .center)
-            .overlay(Rectangle().fill(AppColors.lineSoft.opacity(0.34)).frame(width: 1), alignment: .trailing)
-    }
-}
-
-private func sortEntries(_ entries: [LedgerEntry], by state: EntrySortState) -> [LedgerEntry] {
-    guard let column = state.column, let direction = state.direction else { return entries }
-    return entries.enumerated().sorted { lhs, rhs in
-        let result = compareEntries(lhs.element, rhs.element, by: column)
-        if result == .orderedSame { return lhs.offset < rhs.offset }
-        return direction == .ascending ? result == .orderedAscending : result == .orderedDescending
-    }.map(\.element)
-}
-
-private func compareEntries(_ lhs: LedgerEntry, _ rhs: LedgerEntry, by column: EntrySortColumn) -> ComparisonResult {
-    switch column {
-    case .envelope:
-        compare(lhs.envelopeNo, rhs.envelopeNo)
-    case .name:
-        lhs.name.localizedStandardCompare(rhs.name)
-    case .category:
-        entryCategorySortText(lhs).localizedStandardCompare(entryCategorySortText(rhs))
-    case .amount:
-        compare(lhs.amount, rhs.amount)
-    case .tickets:
-        compare(lhs.mealTicketCount, rhs.mealTicketCount)
-    case .payment:
-        lhs.paymentMethod.label.localizedStandardCompare(rhs.paymentMethod.label)
-    case .status:
-        lhs.status.label.localizedStandardCompare(rhs.status.label)
-    case .time:
-        lhs.createdAt.localizedStandardCompare(rhs.createdAt)
-    case .memo:
-        lhs.memo.localizedStandardCompare(rhs.memo)
-    }
-}
-
-private func entryCategorySortText(_ entry: LedgerEntry) -> String {
-    [entry.groupName, entry.relationship, entry.targetPerson].filter { !$0.isEmpty }.joined(separator: " ")
-}
-
-private func compare(_ lhs: Int, _ rhs: Int) -> ComparisonResult {
-    if lhs < rhs { return .orderedAscending }
-    if lhs > rhs { return .orderedDescending }
-    return .orderedSame
 }
 
 struct EntryCategoryCell: View {

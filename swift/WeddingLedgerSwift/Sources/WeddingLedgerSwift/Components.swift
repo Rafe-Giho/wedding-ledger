@@ -156,7 +156,6 @@ struct PillButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 18)
                 .frame(height: 46)
                 .foregroundStyle(AppColors.text)
@@ -164,7 +163,38 @@ struct PillButton: View {
                 .overlay(Capsule().stroke(outlined ? AppColors.gold : AppColors.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .contentShape(Capsule())
+    }
+}
+
+struct QuickAmountButton: View {
+    let title: String
+    let outlined: Bool
+    let action: () -> Void
+
+    init(_ title: String, outlined: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.outlined = outlined
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Capsule()
+                    .fill(outlined ? Color.clear : AppColors.goldSoft)
+                Capsule()
+                    .stroke(outlined ? AppColors.gold : AppColors.line, lineWidth: 1)
+                Text(title)
+                    .foregroundStyle(AppColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 12)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .frame(maxWidth: .infinity)
     }
 }
