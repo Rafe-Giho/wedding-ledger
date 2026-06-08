@@ -22,7 +22,7 @@ dist/축의대 장부.app
 
 - macOS 14 이상
 - Swift 빌드 환경은 개발/패키징 시에만 필요
-- 생성된 앱 번들은 앱 실행 시 Python이 필요하지 않음
+- 생성된 앱 번들은 실행 시 별도 개발 런타임이 필요하지 않음
 
 ## 버전
 
@@ -60,4 +60,4 @@ xattr -dr com.apple.quarantine "/Applications/축의대 장부.app"
 
 ## 레거시
 
-Python/Tkinter 버전은 레거시 브랜치 또는 기존 스크립트 참고용으로만 유지한다. 배포 기준은 Swift 앱이다.
+이전 Python/Tkinter 버전은 `legacy/python-tkinter` 브랜치에 보존한다. main 브랜치의 배포 기준은 Swift 앱이다.
