@@ -1578,13 +1578,7 @@ struct AuthView: View {
                 SecureField("비밀번호 확인", text: $confirmation)
                     .textFieldStyle(.roundedBorder)
             }
-            Button(state.isConfigured ? "로그인" : "비밀번호 설정") {
-                if state.isConfigured {
-                    state.login(password: password)
-                } else {
-                    state.setup(password: password, confirmation: confirmation)
-                }
-            }
+            Button(state.isConfigured ? "로그인" : "비밀번호 설정", action: submit)
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.return)
             if state.isConfigured {
@@ -1598,8 +1592,18 @@ struct AuthView: View {
         .background(AppColors.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(AppColors.line, lineWidth: 1))
         .shadow(radius: 24)
+        .submitLabel(.done)
+        .onSubmit(submit)
         .sheet(isPresented: $showRecovery) {
             PasswordResetView()
+        }
+    }
+
+    private func submit() {
+        if state.isConfigured {
+            state.login(password: password)
+        } else {
+            state.setup(password: password, confirmation: confirmation)
         }
     }
 }
