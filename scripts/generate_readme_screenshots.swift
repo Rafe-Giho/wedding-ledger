@@ -4,6 +4,7 @@ import Foundation
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
 let outputDirectory = root.appendingPathComponent("assets/readme/screenshots", isDirectory: true)
 try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+let readmeVersion = try currentAppVersion()
 
 let canvas = CGSize(width: 1440, height: 900)
 
@@ -21,6 +22,19 @@ let sidebar = color(36, 31, 27)
 let window = color(20, 19, 17)
 let line = color(84, 70, 55)
 let danger = color(230, 128, 112)
+
+func currentAppVersion() throws -> String {
+    let buildScript = root.appendingPathComponent("scripts/build_swift_macos_app.py")
+    let contents = try String(contentsOf: buildScript, encoding: .utf8)
+    let marker = #"APP_VERSION = os.environ.get("APP_VERSION", ""#
+    guard
+        let start = contents.range(of: marker)?.upperBound,
+        let end = contents[start...].firstIndex(of: "\"")
+    else {
+        throw NSError(domain: "ReadmeScreenshots", code: 1, userInfo: [NSLocalizedDescriptionKey: "APP_VERSION 값을 찾을 수 없습니다."])
+    }
+    return String(contents[start..<end])
+}
 
 struct Rect {
     let x: CGFloat
@@ -114,7 +128,7 @@ func drawTopBar() {
     pill("운영 모드", x: 1002, y: 74, w: 86, h: 34, fill: color(39, 34, 29), stroke: color(116, 91, 62), color: muted)
     pill("라이트", x: 1122, y: 74, w: 90, h: 34, fill: color(45, 41, 37), stroke: color(55, 50, 45), color: muted)
     pill("다크", x: 1216, y: 74, w: 90, h: 34, fill: goldSoft, stroke: gold, color: ink)
-    pill("v1.1.x", x: 1322, y: 77, w: 64, h: 28, fill: color(42, 36, 30, 0.72), stroke: color(98, 82, 63), color: muted)
+    pill("v\(readmeVersion)", x: 1318, y: 77, w: 76, h: 28, fill: color(42, 36, 30, 0.72), stroke: color(98, 82, 63), color: muted)
 }
 
 func cardBox(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat, title: String) {
