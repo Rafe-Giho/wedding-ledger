@@ -48,7 +48,7 @@
 가장 쉬운 설치 방법입니다. 다운로드 오류가 잠깐 발생해도 재시도하도록 `curl` 옵션을 포함했습니다.
 
 ```bash
-curl -fL --retry 5 --retry-delay 2 https://github.com/Rafe-Giho/wedding-ledger/releases/latest/download/install_macos.sh -o /tmp/install_wedding_ledger.sh
+curl -fL --retry 8 --retry-delay 2 --retry-max-time 120 --retry-all-errors https://github.com/Rafe-Giho/wedding-ledger/releases/latest/download/install_macos.sh -o /tmp/install_wedding_ledger.sh
 sh /tmp/install_wedding_ledger.sh
 ```
 
