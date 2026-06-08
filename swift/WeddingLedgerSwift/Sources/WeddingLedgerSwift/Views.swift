@@ -715,9 +715,10 @@ struct DuplicateEntryPreviewRow: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppColors.text)
                 Spacer()
-                Text(entry.createdAt)
+                Text(ledgerClockText(entry.createdAt))
                     .font(.caption)
                     .foregroundStyle(AppColors.muted)
+                    .help(entry.createdAt)
             }
             Text("모임 \(entry.groupName) · 관계 \(entry.relationship.isEmpty ? "-" : entry.relationship)")
                 .font(.caption)
@@ -917,7 +918,7 @@ struct SummaryView: View {
                 Text("정산")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.text)
-                Text("최근 입력: \(state.recentEntries.first?.createdAt ?? "아직 입력 없음")")
+                Text("최근 입력: \(latestEntryTime)")
                     .font(.footnote)
                     .foregroundStyle(AppColors.muted)
                 LazyVGrid(columns: layout.summaryTileColumns, spacing: layout.summaryTileSpacing) {
@@ -937,6 +938,13 @@ struct SummaryView: View {
             .frame(maxHeight: layout == .compact ? nil : .infinity, alignment: .topLeading)
         }
         .frame(minHeight: layout == .compact ? nil : availableHeight)
+    }
+
+    private var latestEntryTime: String {
+        guard let timestamp = state.recentEntries.first?.createdAt else {
+            return "아직 입력 없음"
+        }
+        return "\(ledgerDateText(timestamp)) \(ledgerClockText(timestamp))"
     }
 }
 
@@ -1679,25 +1687,62 @@ struct EntryTable: View {
         } else {
             Table(entries) {
                 TableColumn("봉투") { Text("\($0.envelopeNo)").monospacedDigit() }
-                    .width(min: 52, ideal: 60, max: 68)
-                TableColumn("이름", value: \.name)
-                TableColumn("모임", value: \.groupName)
-                TableColumn("관계", value: \.relationship)
-                TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold) }
+                    .width(min: 48, ideal: 56, max: 64)
+                TableColumn("이름") { Text($0.name).lineLimit(1) }
+                    .width(min: 78, ideal: 100, max: 150)
+                TableColumn("모임") { Text($0.groupName).lineLimit(1) }
+                    .width(min: 78, ideal: 108, max: 150)
+                TableColumn("관계") { Text($0.relationship.isEmpty ? "-" : $0.relationship).lineLimit(1) }
+                    .width(min: 64, ideal: 88, max: 130)
+                TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
+                    .width(min: 92, ideal: 112, max: 132)
                 TableColumn("식권") { Text("\($0.mealTicketCount)").monospacedDigit() }
                     .width(min: 44, ideal: 52, max: 60)
                 TableColumn("방식") { Text($0.paymentMethod.label) }
-                    .width(min: 52, ideal: 60, max: 72)
-                TableColumn("상태") { Text($0.status.label) }
-                    .width(min: 50, ideal: 58, max: 70)
-                TableColumn("입력시간") { Text($0.createdAt) }
-                TableColumn("관리") { entry in
-                    EntryStatusButton(entry: entry)
+                    .width(min: 48, ideal: 56, max: 64)
+                TableColumn("상태") { EntryStatusCell(entry: $0) }
+                    .width(min: 74, ideal: 84, max: 96)
+                TableColumn("시간") { EntryTimeCell(timestamp: $0.createdAt) }
+                    .width(min: 84, ideal: 94, max: 108)
+                TableColumn("메모") { entry in
+                    Text(entry.memo.isEmpty ? "-" : entry.memo)
+                        .foregroundStyle(entry.memo.isEmpty ? AppColors.muted : AppColors.text)
+                        .lineLimit(1)
+                        .help(entry.memo.isEmpty ? "메모 없음" : entry.memo)
                 }
-                .width(min: 72, ideal: 82, max: 96)
+                .width(min: 120, ideal: 180, max: 280)
             }
             .frame(minHeight: 520)
         }
+    }
+}
+
+struct EntryStatusCell: View {
+    let entry: LedgerEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(entry.status.label)
+                .font(.caption)
+                .foregroundStyle(AppColors.text)
+            EntryStatusButton(entry: entry)
+        }
+    }
+}
+
+struct EntryTimeCell: View {
+    let timestamp: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(ledgerClockText(timestamp))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(AppColors.text)
+            Text(ledgerDateText(timestamp))
+                .font(.caption2)
+                .foregroundStyle(AppColors.muted)
+        }
+        .help(timestamp)
     }
 }
 
@@ -1717,6 +1762,12 @@ struct EntryCompactRow: View {
                 Text([entry.groupName, entry.relationship].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.subheadline)
                     .foregroundStyle(AppColors.muted)
+                if !entry.memo.isEmpty {
+                    Text(entry.memo)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.muted)
+                        .lineLimit(2)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 6) {
@@ -1726,9 +1777,10 @@ struct EntryCompactRow: View {
                 Text("식권 \(entry.mealTicketCount)매")
                     .font(.caption)
                     .foregroundStyle(AppColors.muted)
-                Text(entry.createdAt)
+                Text(ledgerClockText(entry.createdAt))
                     .font(.caption2)
                     .foregroundStyle(AppColors.muted)
+                    .help(entry.createdAt)
             }
         }
         .padding(16)
