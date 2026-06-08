@@ -7,6 +7,7 @@ struct LedgerEntry: Identifiable, Equatable {
     var name: String
     var groupName: String
     var relationship: String
+    var targetPerson: String
     var amount: Int
     var mealTicketCount: Int
     var paymentMethod: PaymentMethod
@@ -79,6 +80,7 @@ struct EntryDraft {
     var name = ""
     var groupName = defaultGroup
     var relationship = ""
+    var targetPerson = ""
     var amountText = ""
     var mealTicketCount = 0
     var paymentMethod: PaymentMethod = .cash
@@ -92,6 +94,8 @@ struct EntryFilters: Equatable {
     var name = ""
     var exactName = false
     var groupName = ""
+    var relationship = ""
+    var targetPerson = ""
     var minAmount = ""
     var maxAmount = ""
     var ticketCount = ""

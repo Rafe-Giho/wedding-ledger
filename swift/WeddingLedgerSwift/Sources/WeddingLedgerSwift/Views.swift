@@ -545,14 +545,17 @@ struct EntryFormView: View {
             Text("새로운 축의 입력")
                 .font(.system(size: dense ? 21 : 22, weight: .bold))
                 .foregroundStyle(AppColors.text)
+            Text("필수: 이름, 금액 · 자동/기본: 봉투번호, 입금방식, 식권 0매 · 선택: 모임, 관계, 대상, 메모")
+                .font(.caption)
+                .foregroundStyle(AppColors.muted)
             AdaptivePair(stacked: compact) {
-                FieldLabel("봉투번호") {
+                FieldLabel("봉투번호", badge: "자동") {
                     TextField("봉투번호", value: $state.draft.envelopeNo, format: .number)
                         .textFieldStyle(.plain)
                         .font(.system(size: 18, weight: .semibold))
                 }
             } second: {
-                FieldLabel("입금방식") {
+                FieldLabel("입금방식", badge: "기본") {
                     Picker("", selection: $state.draft.paymentMethod) {
                         ForEach(PaymentMethod.allCases) { method in
                             Text(method.label).tag(method)
@@ -569,7 +572,7 @@ struct EntryFormView: View {
                 }
             }
             if state.draft.paymentMethod == .transfer {
-                FieldLabel("입금시간") {
+                FieldLabel("입금시간", badge: "선택") {
                     HStack(spacing: 10) {
                         TextField("YYYY-MM-DD HH:mm:ss 또는 HH:mm:ss", text: $state.draft.createdAtText)
                             .textFieldStyle(.plain)
@@ -583,16 +586,7 @@ struct EntryFormView: View {
                     .font(.caption)
                     .foregroundStyle(AppColors.muted)
             }
-            AdaptivePair(stacked: compact) {
-                FieldLabel("모임") {
-                    SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
-                }
-            } second: {
-                FieldLabel("관계") {
-                    SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
-                }
-            }
-            FieldLabel("이름") {
+            FieldLabel("이름", badge: "필수") {
                 TextField("이름을 입력하세요", text: $state.draft.name)
                     .textFieldStyle(.plain)
                     .focused($nameFocused)
@@ -601,7 +595,22 @@ struct EntryFormView: View {
                     }
             }
             AdaptivePair(stacked: compact) {
-                FieldLabel("금액") {
+                FieldLabel("모임", badge: "선택") {
+                    SuggestionTextField(text: $state.draft.groupName, suggestions: state.groups)
+                }
+            } second: {
+                FieldLabel("관계", badge: "선택") {
+                    SuggestionTextField(text: $state.draft.relationship, suggestions: state.relationships)
+                }
+            }
+            FieldLabel("대상", badge: "선택") {
+                SuggestionTextField(text: $state.draft.targetPerson, suggestions: state.targets)
+            }
+            Text("대상은 하객이 누구 쪽 손님인지 적는 칸입니다. 예: 신부, 아버지, 어머니, 형제")
+                .font(.caption)
+                .foregroundStyle(AppColors.muted)
+            AdaptivePair(stacked: compact) {
+                FieldLabel("금액", badge: "필수") {
                     HStack {
                         Text("₩").foregroundStyle(AppColors.muted)
                         TextField("금액을 입력하세요", text: $state.draft.amountText)
@@ -613,7 +622,7 @@ struct EntryFormView: View {
                     }
                 }
             } second: {
-                FieldLabel("식권") {
+                FieldLabel("식권", badge: "기본") {
                     HStack(spacing: 10) {
                         Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
                         Button("-") { state.draft.mealTicketCount = max(0, state.draft.mealTicketCount - 1) }
@@ -640,7 +649,7 @@ struct EntryFormView: View {
                     }
                 }
             }
-            FieldLabel("메모 (선택)") {
+            FieldLabel("메모", badge: "선택") {
                 TextEditor(text: $state.draft.memo)
                     .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
                     .scrollContentBackground(.hidden)
@@ -726,7 +735,7 @@ struct DuplicateEntryPreviewRow: View {
                     .foregroundStyle(AppColors.muted)
                     .help(entry.createdAt)
             }
-            Text("모임 \(entry.groupName) · 관계 \(entry.relationship.isEmpty ? "-" : entry.relationship)")
+            Text("모임 \(entry.groupName) · 관계 \(entry.relationship.isEmpty ? "-" : entry.relationship) · 대상 \(entry.targetPerson.isEmpty ? "-" : entry.targetPerson)")
                 .font(.caption)
                 .foregroundStyle(AppColors.muted)
             Text("금액 \(formatWon(entry.amount)) · 식권 \(entry.mealTicketCount)매")
@@ -843,6 +852,8 @@ struct SearchView: View {
                         }
                     ))
                     SoftTextField("모임", text: $filters.groupName)
+                    SoftTextField("관계", text: $filters.relationship)
+                    SoftTextField("대상", text: $filters.targetPerson)
                     SoftTextField("최소 금액", text: $filters.minAmount)
                         .onChange(of: filters.minAmount) { _, value in filters.minAmount = formatFilterAmount(value) }
                     SoftTextField("최대 금액", text: $filters.maxAmount)
@@ -1502,7 +1513,7 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
             GuideSection(title: "정산의 정석", items: [
                 "봉투와 돈은 즉시 분리하지 않습니다. 금액이 비었을 때 확인할 방법이 사라집니다.",
                 "하객이 봉투를 주면 봉투 겉면에 순번을 먼저 적고, 앱의 봉투번호와 맞춥니다.",
-                "봉투 안 금액을 확인한 뒤 봉투 뒷면에도 금액을 적고 앱에 이름, 관계, 금액을 기록합니다.",
+                "봉투 안 금액을 확인한 뒤 봉투 뒷면에도 금액을 적고 앱에 이름, 관계, 대상, 금액을 기록합니다.",
                 "봉투는 10장 또는 20장 단위로 고무줄이나 집게로 묶어두면 마감 정산이 빨라집니다."
             ]),
             GuideSection(title: "식권과 답례품", items: [
@@ -1548,11 +1559,11 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
             GuideSection(title: "입력", items: [
                 "봉투번호는 자동 증가하지만 필요하면 직접 수정할 수 있습니다.",
                 "이름과 금액은 필수이며, 식권 수는 기본 0매입니다.",
-                "모임과 관계는 직접 입력하면 이후 목록에서 다시 선택할 수 있습니다.",
+                "모임, 관계, 대상은 직접 입력하면 이후 목록에서 다시 선택할 수 있습니다.",
                 "같은 이름이 있으면 기존 기록이 즉시 표시되고 새 동명이인 저장 여부를 고를 수 있습니다."
             ]),
             GuideSection(title: "검색/정산", items: [
-                "검색에서는 이름, 모임, 금액 범위, 식권수, 입금방식, 상태로 기록을 찾습니다.",
+                "검색에서는 이름, 모임, 대상, 금액 범위, 식권수, 입금방식, 상태로 기록을 찾습니다.",
                 "정산에서는 봉투 대조, 식권 대조, 현금 확인, 계좌 확인 카드를 먼저 확인합니다.",
                 "마감 검수 순서에서 실물 봉투, 현금, 계좌 입금, 남은 식권, 동명이인을 차례로 확인합니다."
             ]),
@@ -1712,7 +1723,7 @@ struct EntryTable: View {
                 TableColumn("이름") { Text($0.name).lineLimit(1) }
                     .width(min: 78, ideal: 100, max: 150)
                 TableColumn("분류") { EntryCategoryCell(entry: $0) }
-                    .width(min: 112, ideal: 142, max: 190)
+                    .width(min: 132, ideal: 168, max: 220)
                 TableColumn("금액") { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
                     .width(min: 92, ideal: 112, max: 132)
                 TableColumn("식권") { Text("\($0.mealTicketCount)").monospacedDigit() }
@@ -1747,7 +1758,7 @@ struct EntryCategoryCell: View {
                 .font(.caption)
                 .foregroundStyle(AppColors.text)
                 .lineLimit(1)
-            Text(entry.relationship.isEmpty ? "-" : entry.relationship)
+            Text([entry.relationship, entry.targetPerson.isEmpty ? "" : "대상 \(entry.targetPerson)"].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption2)
                 .foregroundStyle(AppColors.muted)
                 .lineLimit(1)
@@ -1800,7 +1811,7 @@ struct EntryCompactRow: View {
                     Text(entry.name)
                         .font(.headline)
                         .foregroundStyle(AppColors.text)
-                    Text([entry.groupName, entry.relationship].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([entry.groupName, entry.relationship, entry.targetPerson.isEmpty ? "" : "대상 \(entry.targetPerson)"].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.subheadline)
                         .foregroundStyle(AppColors.muted)
                     if !entry.memo.isEmpty {

@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
     @Published var duplicateMatches: [LedgerEntry] = []
     @Published var groups: [String] = [defaultGroup]
     @Published var relationships: [String] = []
+    @Published var targets: [String] = []
     @Published var message = ""
     @Published var recoveryKeyToShow: String?
 
@@ -39,6 +40,7 @@ final class AppState: ObservableObject {
             draft.envelopeNo = try store.nextEnvelopeNo(mode: mode)
             groups = try store.recentGroups()
             relationships = try store.recentRelationships()
+            targets = try store.recentTargets()
             recentEntries = try store.lastEntries(mode: mode, limit: 8)
             summary = try store.summary(mode: mode)
             searchResults = try store.findEntries(filters: searchFilters, mode: mode)

@@ -45,18 +45,31 @@ struct Card<Content: View>: View {
 
 struct FieldLabel<Content: View>: View {
     let title: String
+    let badge: String?
     @ViewBuilder let content: Content
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+    init(_ title: String, badge: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.badge = badge
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AppColors.text)
+            HStack(spacing: 7) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.text)
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(badge == "필수" ? AppColors.gold : AppColors.muted)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(badge == "필수" ? AppColors.goldSoft : AppColors.field, in: Capsule())
+                        .overlay(Capsule().stroke(AppColors.lineSoft, lineWidth: 1))
+                }
+            }
             content
                 .padding(.horizontal, 12)
                 .frame(minHeight: 44)

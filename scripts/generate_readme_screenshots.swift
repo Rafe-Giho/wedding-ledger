@@ -138,16 +138,18 @@ func cardBox(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat, title: String) {
 
 try screenshot("entry") {
     cardBox(x: 316, y: 134, w: 520, h: 650, title: "새로운 축의 입력")
+    text("필수: 이름, 금액 · 선택: 모임, 관계, 대상, 메모", x: 348, y: 182, size: 12, weight: .regular, color: muted, width: 454)
     fieldBox("봉투번호", value: "10", x: 348, y: 214, w: 222)
     fieldBox("입금방식", value: "계좌", x: 588, y: 214, w: 214)
-    fieldBox("모임", value: "회사", x: 348, y: 314, w: 222)
-    fieldBox("관계", value: "동료", x: 588, y: 314, w: 214)
-    fieldBox("이름", value: "홍길동", x: 348, y: 414, w: 454)
-    fieldBox("금액", value: "₩ 100,000", x: 348, y: 514, w: 222)
-    fieldBox("식권", value: "2매", x: 588, y: 514, w: 214)
-    text("금액 빠른 선택", x: 348, y: 600, size: 15, weight: .bold)
+    fieldBox("이름", value: "홍길동", x: 348, y: 294, w: 454)
+    fieldBox("모임", value: "회사", x: 348, y: 374, w: 222)
+    fieldBox("관계", value: "동료", x: 588, y: 374, w: 214)
+    fieldBox("대상", value: "아버지", x: 348, y: 454, w: 454)
+    fieldBox("금액", value: "₩ 100,000", x: 348, y: 534, w: 222)
+    fieldBox("식권", value: "2매", x: 588, y: 534, w: 214)
+    text("금액 빠른 선택", x: 348, y: 610, size: 15, weight: .bold)
     for (index, amount) in ["30,000", "50,000", "100,000", "150,000", "200,000", "+1만원"].enumerated() {
-        pill(amount, x: 348 + CGFloat(index % 3) * 146, y: 632 + CGFloat(index / 3) * 54, w: 118)
+        pill(amount, x: 348 + CGFloat(index % 3) * 146, y: 640 + CGFloat(index / 3) * 48, w: 118)
     }
     rounded(Rect(x: 348, y: 738, w: 454, h: 48), radius: 18, fill: ink)
     text("저장", x: 348, y: 751, size: 18, weight: .bold, color: window, width: 454, align: .center)
@@ -170,7 +172,7 @@ try screenshot("entry") {
 
 try screenshot("search") {
     cardBox(x: 316, y: 134, w: 1040, h: 650, title: "검색")
-    let filters = [("이름", "김민수"), ("모임", ""), ("최소 금액", "50,000"), ("최대 금액", ""), ("식권수", ""), ("입금방식", "전체"), ("상태", "정상")]
+    let filters = [("이름", "김민수"), ("모임", ""), ("관계", "동료"), ("대상", "아버지"), ("최소 금액", "50,000"), ("식권수", ""), ("입금방식", "전체"), ("상태", "정상")]
     for (index, item) in filters.enumerated() {
         let x = 348 + CGFloat(index % 4) * 238
         let y = 214 + CGFloat(index / 4) * 82

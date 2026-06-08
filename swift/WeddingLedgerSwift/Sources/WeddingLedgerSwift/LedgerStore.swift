@@ -57,6 +57,7 @@ final class LedgerStore {
                 name TEXT NOT NULL,
                 group_name TEXT NOT NULL DEFAULT '미분류',
                 relationship TEXT DEFAULT '',
+                target_person TEXT DEFAULT '',
                 amount INTEGER NOT NULL CHECK (amount > 0),
                 meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (meal_ticket_count >= 0),
                 payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'transfer', 'other')),
@@ -68,8 +69,10 @@ final class LedgerStore {
             );
             """
         )
+        try ensureEntryColumn(name: "target_person", alterSQL: "ALTER TABLE entries ADD COLUMN target_person TEXT DEFAULT ''")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_name ON entries(name)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_group_name ON entries(group_name)")
+        try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_target_person ON entries(target_person)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_amount ON entries(amount)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_mode ON entries(mode)")
@@ -242,14 +245,14 @@ final class LedgerStore {
             try db.execute(
                 """
                 INSERT INTO entries (
-                    id, mode, envelope_no, name, group_name, relationship, amount,
+                    id, mode, envelope_no, name, group_name, relationship, target_person, amount,
                     meal_ticket_count, payment_method, memo, status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     .text(id), .text(mode.rawValue), .integer(clean.envelopeNo), .text(clean.name),
-                    .text(clean.groupName), .text(clean.relationship), .integer(clean.amount),
+                    .text(clean.groupName), .text(clean.relationship), .text(clean.targetPerson), .integer(clean.amount),
                     .integer(clean.mealTicketCount), .text(clean.paymentMethod.rawValue), .text(clean.memo),
                     .text(EntryStatus.active.rawValue), .text(createdAt), .text(createdAt)
                 ]
@@ -277,6 +280,14 @@ final class LedgerStore {
         if !filters.groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             clauses.append("group_name LIKE ?")
             values.append(.text("%\(filters.groupName)%"))
+        }
+        if !filters.relationship.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            clauses.append("relationship LIKE ?")
+            values.append(.text("%\(filters.relationship)%"))
+        }
+        if !filters.targetPerson.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            clauses.append("target_person LIKE ?")
+            values.append(.text("%\(filters.targetPerson)%"))
         }
         if let paymentMethod = filters.paymentMethod {
             clauses.append("payment_method = ?")
@@ -372,6 +383,10 @@ final class LedgerStore {
 
     func recentRelationships(limit: Int = 50) throws -> [String] {
         try lookupValues(kind: "relationship", limit: limit)
+    }
+
+    func recentTargets(limit: Int = 50) throws -> [String] {
+        try entryColumnValues(column: "target_person", limit: limit)
     }
 
     func voidEntry(id: String, reason: String) throws {
@@ -509,10 +524,11 @@ final class LedgerStore {
         clean.name = clean.name.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.groupName = clean.groupName.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.relationship = clean.relationship.trimmingCharacters(in: .whitespacesAndNewlines)
+        clean.targetPerson = clean.targetPerson.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.memo = clean.memo.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.envelopeNo <= 0 { clean.envelopeNo = try nextEnvelopeNo(mode: mode) }
-        if clean.name.isEmpty { throw LedgerError.invalid("이름은 필수입니다.") }
-        if clean.amount <= 0 { throw LedgerError.invalid("금액은 0원보다 커야 합니다.") }
+        if clean.name.isEmpty { throw LedgerError.invalid("이름은 필수 입력입니다.") }
+        if clean.amount <= 0 { throw LedgerError.invalid("금액은 필수이며 0원보다 커야 합니다.") }
         if clean.mealTicketCount < 0 { throw LedgerError.invalid("식권 수는 0 이상이어야 합니다.") }
         if clean.groupName.isEmpty { clean.groupName = defaultGroup }
         return clean
@@ -541,6 +557,7 @@ final class LedgerStore {
             name: row["name"]?.string ?? "",
             groupName: row["group_name"]?.string ?? defaultGroup,
             relationship: row["relationship"]?.string ?? "",
+            targetPerson: row["target_person"]?.string ?? "",
             amount: row["amount"]?.int ?? 0,
             mealTicketCount: row["meal_ticket_count"]?.int ?? 0,
             paymentMethod: PaymentMethod(rawValue: row["payment_method"]?.string ?? "") ?? .cash,
@@ -563,6 +580,12 @@ final class LedgerStore {
         for row in rows {
             try addLookupValue(kind: row["kind"]?.string ?? "", value: row["value"]?.string ?? "", increment: false)
         }
+    }
+
+    private func ensureEntryColumn(name: String, alterSQL: String) throws {
+        let columns = try db.query("PRAGMA table_info(entries)")
+        guard !columns.contains(where: { $0["name"]?.string == name }) else { return }
+        try db.execute(alterSQL)
     }
 
     private func addLookupValue(kind: String, value: String, increment: Bool = true) throws {
@@ -623,6 +646,24 @@ final class LedgerStore {
         return values
     }
 
+    private func entryColumnValues(column: String, limit: Int) throws -> [String] {
+        guard ["group_name", "relationship", "target_person"].contains(column) else { return [] }
+        return try db.query(
+            """
+            SELECT \(column) AS value
+            FROM entries
+            WHERE TRIM(\(column)) != ''
+            GROUP BY \(column)
+            ORDER BY COUNT(*) DESC, MAX(updated_at) DESC, value ASC
+            LIMIT ?
+            """,
+            [.integer(limit)]
+        ).compactMap {
+            let value = $0["value"]?.string.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return value.isEmpty ? nil : value
+        }
+    }
+
     private func insertAudit(entryID: String?, action: String, before: LedgerEntry?, after: LedgerEntry?, reason: String) throws {
         let beforeJSON = try before.map(jsonForEntry)
         let afterJSON = try after.map(jsonForEntry)
@@ -658,6 +699,7 @@ final class LedgerStore {
             "name": entry.name,
             "group_name": entry.groupName,
             "relationship": entry.relationship,
+            "target_person": entry.targetPerson,
             "amount": entry.amount,
             "meal_ticket_count": entry.mealTicketCount,
             "payment_method": entry.paymentMethod.rawValue,

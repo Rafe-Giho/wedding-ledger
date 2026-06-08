@@ -10,6 +10,7 @@
 | name | TEXT | 이름 |
 | group_name | TEXT | 모임, 기본값 미분류 |
 | relationship | TEXT | 관계 |
+| target_person | TEXT | 대상, 누구 쪽 손님인지 |
 | amount | INTEGER | 축의금 |
 | meal_ticket_count | INTEGER | 식권 수 |
 | payment_method | TEXT | cash, transfer, other |
