@@ -8,6 +8,7 @@ final class AppState: ObservableObject {
     @Published var isUnlocked = false
     @Published var mode: LedgerMode = .test
     @Published var themePreference: ThemePreference = .system
+    @Published var appearanceRevision = 0
     @Published var draft = EntryDraft(envelopeNo: 1)
     @Published var recentEntries: [LedgerEntry] = []
     @Published var searchResults: [LedgerEntry] = []
@@ -135,11 +136,13 @@ final class AppState: ObservableObject {
         let previous = themePreference
         themePreference = preference
         applyAppearance(preference)
+        appearanceRevision += 1
         do {
             try store.setThemePreference(preference)
         } catch {
             themePreference = previous
             applyAppearance(previous)
+            appearanceRevision += 1
             message = error.localizedDescription
         }
     }

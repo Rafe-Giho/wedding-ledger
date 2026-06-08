@@ -140,11 +140,6 @@ struct ShellView: View {
                         WorkspaceContent(section: $section, layout: layout)
                     }
                 }
-                VersionBadge()
-                    .padding(.trailing, layout.contentPadding)
-                    .padding(.bottom, 8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .zIndex(20)
             }
         }
         .background(AppColors.background)
@@ -244,6 +239,7 @@ struct TopBarView: View {
             Spacer()
             ModePill(title: "\(state.mode.label) 모드")
             ThemePreferenceControl(compact: compact)
+            VersionBadge()
         }
         .frame(minHeight: 36)
     }
