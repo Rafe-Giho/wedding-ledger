@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -32,6 +33,7 @@ final class AppState: ObservableObject {
             isConfigured = store.isConfigured()
             mode = store.mode()
             themePreference = store.themePreference()
+            applyAppearance(themePreference)
             operationSettings = store.operationSettings()
             draft.envelopeNo = try store.nextEnvelopeNo(mode: mode)
             groups = try store.recentGroups()
@@ -132,11 +134,24 @@ final class AppState: ObservableObject {
     func setTheme(_ preference: ThemePreference) {
         let previous = themePreference
         themePreference = preference
+        applyAppearance(preference)
         do {
             try store.setThemePreference(preference)
         } catch {
             themePreference = previous
+            applyAppearance(previous)
             message = error.localizedDescription
+        }
+    }
+
+    private func applyAppearance(_ preference: ThemePreference) {
+        switch preference {
+        case .system:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
         }
     }
 
