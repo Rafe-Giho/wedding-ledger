@@ -21,6 +21,7 @@ final class AppState: ObservableObject {
     @Published var relationships: [String] = []
     @Published var targets: [String] = []
     @Published var message = ""
+    @Published var lastExportURL: URL?
     @Published var recoveryKeyToShow: String?
 
     let store: LedgerStore
@@ -222,10 +223,19 @@ final class AppState: ObservableObject {
         do {
             let backup = try store.createBackup(label: "before_export")
             let output = try store.exportXLSX(to: url, mode: mode)
+            lastExportURL = output
             message = "엑셀 추출 완료: \(output.path)\n백업: \(backup.path)"
         } catch {
+            lastExportURL = nil
             message = error.localizedDescription
         }
+    }
+
+    func openLastExportLocation() {
+        guard let lastExportURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([lastExportURL])
+        self.lastExportURL = nil
+        message = ""
     }
 
     func restoreBackup(from url: URL) {

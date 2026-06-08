@@ -78,8 +78,11 @@ struct RootView: View {
                 AuthView()
             }
         }
-        .alert("알림", isPresented: Binding(get: { !state.message.isEmpty }, set: { if !$0 { state.message = "" } })) {
-            Button("확인") { state.message = "" }
+        .alert("알림", isPresented: Binding(get: { !state.message.isEmpty }, set: { if !$0 { clearMessage() } })) {
+            if state.lastExportURL != nil {
+                Button("위치 열기") { state.openLastExportLocation() }
+            }
+            Button("확인") { clearMessage() }
         } message: {
             Text(state.message)
         }
@@ -89,6 +92,11 @@ struct RootView: View {
         )) { sheet in
             RecoveryKeyView(recoveryKey: sheet.key)
         }
+    }
+
+    private func clearMessage() {
+        state.message = ""
+        state.lastExportURL = nil
     }
 }
 
