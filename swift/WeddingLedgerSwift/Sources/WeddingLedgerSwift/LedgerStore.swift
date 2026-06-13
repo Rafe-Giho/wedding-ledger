@@ -112,6 +112,7 @@ final class LedgerStore {
             );
             """
         )
+        try repairLegacyMigrationArtifactsIfNeeded()
         if getSetting("schema_version") == nil { try setSetting("schema_version", "1") }
         if getSetting("current_mode") == nil { try setSetting("current_mode", LedgerMode.test.rawValue) }
         try seedLookupItemsFromEntries()
@@ -642,12 +643,12 @@ final class LedgerStore {
         let needsRebuild = sql.contains("amount > 0") || sql.contains("UNIQUE(mode, envelope_no)")
         guard needsRebuild else { return }
 
-        try db.execute("DROP INDEX IF EXISTS idx_entries_envelope_unique")
-        try db.execute("DROP INDEX IF EXISTS idx_entries_transfer_unique")
-        try db.execute("ALTER TABLE entries RENAME TO entries_legacy")
+        try db.execute("PRAGMA foreign_keys = OFF")
+        defer { try? db.execute("PRAGMA foreign_keys = ON") }
+        try db.execute("DROP TABLE IF EXISTS entries_new")
         try db.execute(
             """
-            CREATE TABLE entries (
+            CREATE TABLE entries_new (
                 id TEXT PRIMARY KEY,
                 mode TEXT NOT NULL CHECK (mode IN ('test', 'live')),
                 envelope_no INTEGER NOT NULL DEFAULT 0,
@@ -669,7 +670,7 @@ final class LedgerStore {
         )
         try db.execute(
             """
-            INSERT INTO entries (
+            INSERT INTO entries_new (
                 id, mode, envelope_no, transfer_no, name, group_name, relationship, target_person,
                 amount, meal_ticket_count, child_meal_ticket_count, payment_method, memo, status,
                 created_at, updated_at
@@ -680,10 +681,11 @@ final class LedgerStore {
                 CASE WHEN payment_method = 'transfer' THEN transfer_no ELSE 0 END,
                 name, group_name, relationship, target_person, amount, meal_ticket_count,
                 child_meal_ticket_count, payment_method, memo, status, created_at, updated_at
-            FROM entries_legacy;
+            FROM entries;
             """
         )
-        try db.execute("DROP TABLE entries_legacy")
+        try db.execute("DROP TABLE entries")
+        try db.execute("ALTER TABLE entries_new RENAME TO entries")
     }
 
     private func backfillTransferNumbers() throws {
@@ -703,6 +705,49 @@ final class LedgerStore {
                 try db.execute("UPDATE entries SET transfer_no = ? WHERE id = ?", [.integer(next), .text(id)])
                 next += 1
             }
+        }
+    }
+
+    private func repairLegacyMigrationArtifactsIfNeeded() throws {
+        let tables = try db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .compactMap { $0["name"]?.string }
+        let hasLegacyEntries = tables.contains("entries_legacy")
+        let auditSQL = try db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audit_logs'")
+            .first?["sql"]?.string ?? ""
+        let auditReferencesLegacy = auditSQL.contains("entries_legacy")
+        guard hasLegacyEntries || auditReferencesLegacy else { return }
+
+        try db.execute("PRAGMA foreign_keys = OFF")
+        defer { try? db.execute("PRAGMA foreign_keys = ON") }
+
+        if auditReferencesLegacy {
+            try db.execute("DROP TABLE IF EXISTS audit_logs_new")
+            try db.execute(
+                """
+                CREATE TABLE audit_logs_new (
+                    id TEXT PRIMARY KEY,
+                    entry_id TEXT,
+                    action TEXT NOT NULL,
+                    before_json TEXT,
+                    after_json TEXT,
+                    reason TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(entry_id) REFERENCES entries(id)
+                );
+                """
+            )
+            try db.execute(
+                """
+                INSERT INTO audit_logs_new(id, entry_id, action, before_json, after_json, reason, created_at)
+                SELECT id, entry_id, action, before_json, after_json, reason, created_at
+                FROM audit_logs;
+                """
+            )
+            try db.execute("DROP TABLE audit_logs")
+            try db.execute("ALTER TABLE audit_logs_new RENAME TO audit_logs")
+        }
+        if hasLegacyEntries {
+            try db.execute("DROP TABLE entries_legacy")
         }
     }
 
