@@ -53,26 +53,34 @@ final class LedgerStore {
             CREATE TABLE IF NOT EXISTS entries (
                 id TEXT PRIMARY KEY,
                 mode TEXT NOT NULL CHECK (mode IN ('test', 'live')),
-                envelope_no INTEGER NOT NULL,
+                envelope_no INTEGER NOT NULL DEFAULT 0,
+                transfer_no INTEGER NOT NULL DEFAULT 0,
                 name TEXT NOT NULL,
                 group_name TEXT NOT NULL DEFAULT '미분류',
                 relationship TEXT DEFAULT '',
                 target_person TEXT DEFAULT '',
-                amount INTEGER NOT NULL CHECK (amount > 0),
+                amount INTEGER NOT NULL CHECK (amount >= 0),
                 meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (meal_ticket_count >= 0),
+                child_meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (child_meal_ticket_count >= 0),
                 payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'transfer', 'other')),
                 memo TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'void')),
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(mode, envelope_no)
+                updated_at TEXT NOT NULL
             );
             """
         )
         try ensureEntryColumn(name: "target_person", alterSQL: "ALTER TABLE entries ADD COLUMN target_person TEXT DEFAULT ''")
+        try ensureEntryColumn(name: "transfer_no", alterSQL: "ALTER TABLE entries ADD COLUMN transfer_no INTEGER NOT NULL DEFAULT 0")
+        try ensureEntryColumn(name: "child_meal_ticket_count", alterSQL: "ALTER TABLE entries ADD COLUMN child_meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (child_meal_ticket_count >= 0)")
+        try backfillTransferNumbers()
+        try migrateEntryTableSchemaIfNeeded()
+        try db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_envelope_unique ON entries(mode, envelope_no) WHERE payment_method != 'transfer' AND envelope_no > 0")
+        try db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_transfer_unique ON entries(mode, transfer_no) WHERE payment_method = 'transfer' AND transfer_no > 0")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_name ON entries(name)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_group_name ON entries(group_name)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_target_person ON entries(target_person)")
+        try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_transfer_no ON entries(transfer_no)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_amount ON entries(amount)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status)")
         try db.execute("CREATE INDEX IF NOT EXISTS idx_entries_mode ON entries(mode)")
@@ -196,6 +204,7 @@ final class LedgerStore {
         OperationSettings(
             eventTitle: getSetting("event_title") ?? "",
             totalMealTickets: Int(getSetting("total_meal_tickets") ?? "") ?? 0,
+            totalChildMealTickets: Int(getSetting("total_child_meal_tickets") ?? "") ?? 0,
             expectedEnvelopeCount: Int(getSetting("expected_envelope_count") ?? "") ?? 0,
             operationNote: getSetting("operation_note") ?? ""
         )
@@ -204,13 +213,26 @@ final class LedgerStore {
     func setOperationSettings(_ settings: OperationSettings) throws {
         try setSetting("event_title", settings.eventTitle.trimmingCharacters(in: .whitespacesAndNewlines))
         try setSetting("total_meal_tickets", String(max(0, settings.totalMealTickets)))
+        try setSetting("total_child_meal_tickets", String(max(0, settings.totalChildMealTickets)))
         try setSetting("expected_envelope_count", String(max(0, settings.expectedEnvelopeCount)))
         try setSetting("operation_note", settings.operationNote.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     func nextEnvelopeNo(mode: LedgerMode? = nil) throws -> Int {
         let mode = mode ?? self.mode()
-        let rows = try db.query("SELECT COALESCE(MAX(envelope_no), 0) + 1 AS next_no FROM entries WHERE mode = ?", [.text(mode.rawValue)])
+        let rows = try db.query(
+            "SELECT COALESCE(MAX(envelope_no), 0) + 1 AS next_no FROM entries WHERE mode = ? AND payment_method != ? AND envelope_no > 0",
+            [.text(mode.rawValue), .text(PaymentMethod.transfer.rawValue)]
+        )
+        return rows.first?["next_no"]?.int ?? 1
+    }
+
+    func nextTransferNo(mode: LedgerMode? = nil) throws -> Int {
+        let mode = mode ?? self.mode()
+        let rows = try db.query(
+            "SELECT COALESCE(MAX(transfer_no), 0) + 1 AS next_no FROM entries WHERE mode = ? AND payment_method = ? AND transfer_no > 0",
+            [.text(mode.rawValue), .text(PaymentMethod.transfer.rawValue)]
+        )
         return rows.first?["next_no"]?.int ?? 1
     }
 
@@ -245,20 +267,20 @@ final class LedgerStore {
             try db.execute(
                 """
                 INSERT INTO entries (
-                    id, mode, envelope_no, name, group_name, relationship, target_person, amount,
-                    meal_ticket_count, payment_method, memo, status, created_at, updated_at
+                    id, mode, envelope_no, transfer_no, name, group_name, relationship, target_person, amount,
+                    meal_ticket_count, child_meal_ticket_count, payment_method, memo, status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    .text(id), .text(mode.rawValue), .integer(clean.envelopeNo), .text(clean.name),
+                    .text(id), .text(mode.rawValue), .integer(clean.envelopeNo), .integer(clean.transferNo), .text(clean.name),
                     .text(clean.groupName), .text(clean.relationship), .text(clean.targetPerson), .integer(clean.amount),
-                    .integer(clean.mealTicketCount), .text(clean.paymentMethod.rawValue), .text(clean.memo),
+                    .integer(clean.mealTicketCount), .integer(clean.childMealTicketCount), .text(clean.paymentMethod.rawValue), .text(clean.memo),
                     .text(EntryStatus.active.rawValue), .text(createdAt), .text(createdAt)
                 ]
             )
         } catch {
-            throw LedgerError.invalid("봉투번호가 이미 사용되었습니다.")
+            throw LedgerError.invalid(clean.paymentMethod == .transfer ? "계좌차번이 이미 사용되었습니다." : "봉투번호가 이미 사용되었습니다.")
         }
         let entry = try getEntry(id: id)!
         try rememberLookupValues(groupName: entry.groupName, relationship: entry.relationship)
@@ -309,8 +331,20 @@ final class LedgerStore {
             clauses.append("meal_ticket_count = ?")
             values.append(.integer(ticket))
         }
+        if let childTicket = Int(filters.childTicketCount), !filters.childTicketCount.isEmpty {
+            clauses.append("child_meal_ticket_count = ?")
+            values.append(.integer(childTicket))
+        }
         let whereClause = clauses.isEmpty ? "" : "WHERE \(clauses.joined(separator: " AND "))"
-        return try db.query("SELECT * FROM entries \(whereClause) ORDER BY mode DESC, envelope_no ASC, created_at ASC", values).map(entryFromRow)
+        return try db.query(
+            """
+            SELECT * FROM entries \(whereClause)
+            ORDER BY mode DESC,
+                CASE WHEN payment_method = 'transfer' THEN transfer_no ELSE envelope_no END ASC,
+                created_at ASC
+            """,
+            values
+        ).map(entryFromRow)
     }
 
     func lastEntries(mode: LedgerMode, limit: Int = 10) throws -> [LedgerEntry] {
@@ -331,7 +365,7 @@ final class LedgerStore {
         }
         let groupRows = try db.query(
             """
-            SELECT group_name, COUNT(*) AS count, SUM(amount) AS total_amount, SUM(meal_ticket_count) AS total_tickets
+            SELECT group_name, COUNT(*) AS count, SUM(amount) AS total_amount, SUM(meal_ticket_count) AS total_tickets, SUM(child_meal_ticket_count) AS total_child_tickets
             FROM entries
             WHERE mode = ? AND status = ?
             GROUP BY group_name
@@ -350,7 +384,7 @@ final class LedgerStore {
             """,
             [.text(mode.rawValue), .text(EntryStatus.active.rawValue)]
         )
-        let envelopeNumbers = Set(rows.map(\.envelopeNo))
+        let envelopeNumbers = Set(rows.filter { $0.paymentMethod != .transfer && $0.envelopeNo > 0 }.map(\.envelopeNo))
         let gaps: [Int]
         if let minNo = envelopeNumbers.min(), let maxNo = envelopeNumbers.max() {
             gaps = (minNo...maxNo).filter { !envelopeNumbers.contains($0) }
@@ -363,13 +397,15 @@ final class LedgerStore {
             voidCount: void.count,
             totalAmount: active.reduce(0) { $0 + $1.amount },
             totalTickets: active.reduce(0) { $0 + $1.mealTicketCount },
+            totalChildTickets: active.reduce(0) { $0 + $1.childMealTicketCount },
             paymentTotals: paymentTotals,
             groupTotals: groupRows.map {
                 GroupTotal(
                     groupName: $0["group_name"]?.string ?? defaultGroup,
                     count: $0["count"]?.int ?? 0,
                     totalAmount: $0["total_amount"]?.int ?? 0,
-                    totalTickets: $0["total_tickets"]?.int ?? 0
+                    totalTickets: $0["total_tickets"]?.int ?? 0,
+                    totalChildTickets: $0["total_child_tickets"]?.int ?? 0
                 )
             },
             duplicateNames: duplicateRows.map { DuplicateName(name: $0["name"]?.string ?? "", count: $0["count"]?.int ?? 0) },
@@ -423,7 +459,7 @@ final class LedgerStore {
     func auditRows() throws -> [[String: String]] {
         try db.query(
             """
-            SELECT audit_logs.*, entries.envelope_no, entries.name
+            SELECT audit_logs.*, entries.envelope_no, entries.transfer_no, entries.name
             FROM audit_logs
             LEFT JOIN entries ON entries.id = audit_logs.entry_id
             ORDER BY audit_logs.created_at ASC
@@ -435,6 +471,9 @@ final class LedgerStore {
             }
             if output["envelope_no", default: ""].isEmpty {
                 output["envelope_no"] = auditJSONValue(row, key: "envelope_no")
+            }
+            if output["transfer_no", default: ""].isEmpty {
+                output["transfer_no"] = auditJSONValue(row, key: "transfer_no")
             }
             if output["name", default: ""].isEmpty {
                 output["name"] = auditJSONValue(row, key: "name")
@@ -526,10 +565,17 @@ final class LedgerStore {
         clean.relationship = clean.relationship.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.targetPerson = clean.targetPerson.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.memo = clean.memo.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.envelopeNo <= 0 { clean.envelopeNo = try nextEnvelopeNo(mode: mode) }
+        if clean.paymentMethod == .transfer {
+            if clean.transferNo <= 0 { clean.transferNo = try nextTransferNo(mode: mode) }
+            clean.envelopeNo = 0
+        } else {
+            if clean.envelopeNo <= 0 { clean.envelopeNo = try nextEnvelopeNo(mode: mode) }
+            clean.transferNo = 0
+        }
         if clean.name.isEmpty { throw LedgerError.invalid("이름은 필수 입력입니다.") }
-        if clean.amount <= 0 { throw LedgerError.invalid("금액은 필수이며 0원보다 커야 합니다.") }
+        if clean.amount < 0 { throw LedgerError.invalid("금액은 0원 이상이어야 합니다.") }
         if clean.mealTicketCount < 0 { throw LedgerError.invalid("식권 수는 0 이상이어야 합니다.") }
+        if clean.childMealTicketCount < 0 { throw LedgerError.invalid("소인 식권 수는 0 이상이어야 합니다.") }
         if clean.groupName.isEmpty { clean.groupName = defaultGroup }
         return clean
     }
@@ -560,6 +606,8 @@ final class LedgerStore {
             targetPerson: row["target_person"]?.string ?? "",
             amount: row["amount"]?.int ?? 0,
             mealTicketCount: row["meal_ticket_count"]?.int ?? 0,
+            childMealTicketCount: row["child_meal_ticket_count"]?.int ?? 0,
+            transferNo: row["transfer_no"]?.int ?? 0,
             paymentMethod: PaymentMethod(rawValue: row["payment_method"]?.string ?? "") ?? .cash,
             memo: row["memo"]?.string ?? "",
             status: EntryStatus(rawValue: row["status"]?.string ?? "") ?? .active,
@@ -586,6 +634,76 @@ final class LedgerStore {
         let columns = try db.query("PRAGMA table_info(entries)")
         guard !columns.contains(where: { $0["name"]?.string == name }) else { return }
         try db.execute(alterSQL)
+    }
+
+    private func migrateEntryTableSchemaIfNeeded() throws {
+        let sql = try db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'entries'")
+            .first?["sql"]?.string ?? ""
+        let needsRebuild = sql.contains("amount > 0") || sql.contains("UNIQUE(mode, envelope_no)")
+        guard needsRebuild else { return }
+
+        try db.execute("DROP INDEX IF EXISTS idx_entries_envelope_unique")
+        try db.execute("DROP INDEX IF EXISTS idx_entries_transfer_unique")
+        try db.execute("ALTER TABLE entries RENAME TO entries_legacy")
+        try db.execute(
+            """
+            CREATE TABLE entries (
+                id TEXT PRIMARY KEY,
+                mode TEXT NOT NULL CHECK (mode IN ('test', 'live')),
+                envelope_no INTEGER NOT NULL DEFAULT 0,
+                transfer_no INTEGER NOT NULL DEFAULT 0,
+                name TEXT NOT NULL,
+                group_name TEXT NOT NULL DEFAULT '미분류',
+                relationship TEXT DEFAULT '',
+                target_person TEXT DEFAULT '',
+                amount INTEGER NOT NULL CHECK (amount >= 0),
+                meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (meal_ticket_count >= 0),
+                child_meal_ticket_count INTEGER NOT NULL DEFAULT 0 CHECK (child_meal_ticket_count >= 0),
+                payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'transfer', 'other')),
+                memo TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'void')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+        try db.execute(
+            """
+            INSERT INTO entries (
+                id, mode, envelope_no, transfer_no, name, group_name, relationship, target_person,
+                amount, meal_ticket_count, child_meal_ticket_count, payment_method, memo, status,
+                created_at, updated_at
+            )
+            SELECT
+                id, mode,
+                CASE WHEN payment_method = 'transfer' THEN 0 ELSE envelope_no END,
+                CASE WHEN payment_method = 'transfer' THEN transfer_no ELSE 0 END,
+                name, group_name, relationship, target_person, amount, meal_ticket_count,
+                child_meal_ticket_count, payment_method, memo, status, created_at, updated_at
+            FROM entries_legacy;
+            """
+        )
+        try db.execute("DROP TABLE entries_legacy")
+    }
+
+    private func backfillTransferNumbers() throws {
+        for mode in LedgerMode.allCases {
+            let rows = try db.query(
+                """
+                SELECT id
+                FROM entries
+                WHERE mode = ? AND payment_method = ? AND transfer_no <= 0
+                ORDER BY created_at ASC, envelope_no ASC
+                """,
+                [.text(mode.rawValue), .text(PaymentMethod.transfer.rawValue)]
+            )
+            var next = try nextTransferNo(mode: mode)
+            for row in rows {
+                guard let id = row["id"]?.string else { continue }
+                try db.execute("UPDATE entries SET transfer_no = ? WHERE id = ?", [.integer(next), .text(id)])
+                next += 1
+            }
+        }
     }
 
     private func addLookupValue(kind: String, value: String, increment: Bool = true) throws {
@@ -702,6 +820,8 @@ final class LedgerStore {
             "target_person": entry.targetPerson,
             "amount": entry.amount,
             "meal_ticket_count": entry.mealTicketCount,
+            "child_meal_ticket_count": entry.childMealTicketCount,
+            "transfer_no": entry.transferNo,
             "payment_method": entry.paymentMethod.rawValue,
             "memo": entry.memo,
             "status": entry.status.rawValue,

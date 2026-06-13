@@ -39,6 +39,7 @@ final class AppState: ObservableObject {
             applyAppearance(themePreference)
             operationSettings = store.operationSettings()
             draft.envelopeNo = try store.nextEnvelopeNo(mode: mode)
+            draft.transferNo = try store.nextTransferNo(mode: mode)
             groups = try store.recentGroups()
             relationships = try store.recentRelationships()
             targets = try store.recentTargets()
@@ -84,7 +85,7 @@ final class AppState: ObservableObject {
                 return
             }
             _ = try store.createEntry(draft, mode: mode)
-            draft = EntryDraft(envelopeNo: try store.nextEnvelopeNo(mode: mode))
+            draft = EntryDraft(envelopeNo: try store.nextEnvelopeNo(mode: mode), transferNo: try store.nextTransferNo(mode: mode))
             duplicateMatches = []
             refresh()
         } catch {
@@ -124,6 +125,28 @@ final class AppState: ObservableObject {
     func cancelDuplicateReview() {
         draft.name = ""
         duplicateMatches = []
+    }
+
+    func setDraftPaymentMethod(_ method: PaymentMethod) {
+        draft.paymentMethod = method
+        do {
+            if method == .transfer {
+                if draft.transferNo <= 0 {
+                    draft.transferNo = try store.nextTransferNo(mode: mode)
+                }
+                if draft.createdAtText.isEmpty {
+                    draft.createdAtText = nowString()
+                }
+            } else {
+                if draft.envelopeNo <= 0 {
+                    draft.envelopeNo = try store.nextEnvelopeNo(mode: mode)
+                }
+                draft.transferNo = 0
+                draft.createdAtText = ""
+            }
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     func switchMode(_ newMode: LedgerMode) {
@@ -289,7 +312,7 @@ final class AppState: ObservableObject {
     func deleteEntry(_ entry: LedgerEntry) {
         do {
             try store.deleteEntry(id: entry.id, reason: "Swift 앱에서 삭제")
-            message = "봉투 #\(entry.envelopeNo) \(entry.name) 기록을 삭제했습니다."
+            message = "\(entry.sequenceLabel) \(entry.name) 기록을 삭제했습니다."
             refresh()
         } catch {
             message = error.localizedDescription

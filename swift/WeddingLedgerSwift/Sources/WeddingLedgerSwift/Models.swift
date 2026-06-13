@@ -10,11 +10,31 @@ struct LedgerEntry: Identifiable, Equatable {
     var targetPerson: String
     var amount: Int
     var mealTicketCount: Int
+    var childMealTicketCount: Int
+    var transferNo: Int
     var paymentMethod: PaymentMethod
     var memo: String
     var status: EntryStatus
     var createdAt: String
     var updatedAt: String
+
+    var sequenceLabel: String {
+        if paymentMethod == .transfer {
+            return "계좌 #\(transferNo > 0 ? transferNo : envelopeNo)"
+        }
+        return "봉투 #\(envelopeNo)"
+    }
+
+    var shortSequenceLabel: String {
+        if paymentMethod == .transfer {
+            return "계좌 \(transferNo > 0 ? transferNo : envelopeNo)"
+        }
+        return "#\(envelopeNo)"
+    }
+
+    var totalMealTicketCount: Int {
+        mealTicketCount + childMealTicketCount
+    }
 }
 
 struct GroupTotal: Identifiable, Equatable {
@@ -23,6 +43,7 @@ struct GroupTotal: Identifiable, Equatable {
     let count: Int
     let totalAmount: Int
     let totalTickets: Int
+    let totalChildTickets: Int
 }
 
 struct DuplicateName: Identifiable, Equatable {
@@ -45,6 +66,7 @@ enum ClosingCheckKey: String, CaseIterable, Identifiable {
 struct OperationSettings: Equatable {
     var eventTitle = ""
     var totalMealTickets = 0
+    var totalChildMealTickets = 0
     var expectedEnvelopeCount = 0
     var operationNote = ""
 
@@ -57,6 +79,7 @@ struct LedgerSummary: Equatable {
     var voidCount: Int
     var totalAmount: Int
     var totalTickets: Int
+    var totalChildTickets: Int
     var paymentTotals: [PaymentMethod: Int]
     var groupTotals: [GroupTotal]
     var duplicateNames: [DuplicateName]
@@ -68,6 +91,7 @@ struct LedgerSummary: Equatable {
         voidCount: 0,
         totalAmount: 0,
         totalTickets: 0,
+        totalChildTickets: 0,
         paymentTotals: [.cash: 0, .transfer: 0, .other: 0],
         groupTotals: [],
         duplicateNames: [],
@@ -77,12 +101,14 @@ struct LedgerSummary: Equatable {
 
 struct EntryDraft {
     var envelopeNo: Int
+    var transferNo = 1
     var name = ""
     var groupName = defaultGroup
     var relationship = ""
     var targetPerson = ""
     var amountText = ""
     var mealTicketCount = 0
+    var childMealTicketCount = 0
     var paymentMethod: PaymentMethod = .cash
     var createdAtText = ""
     var memo = ""
@@ -99,6 +125,7 @@ struct EntryFilters: Equatable {
     var minAmount = ""
     var maxAmount = ""
     var ticketCount = ""
+    var childTicketCount = ""
     var paymentMethod: PaymentMethod?
     var status: EntryStatus?
 }

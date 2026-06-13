@@ -545,12 +545,16 @@ struct EntryFormView: View {
             Text("새로운 축의 입력")
                 .font(.system(size: dense ? 21 : 22, weight: .bold))
                 .foregroundStyle(AppColors.text)
-            Text("필수: 이름, 금액 · 자동/기본: 봉투번호, 입금방식, 식권 0매 · 선택: 모임, 관계, 대상, 메모")
+            Text("필수: 이름, 금액 · 자동/기본: 봉투번호/계좌차번, 입금방식, 식권 0매 · 선택: 모임, 관계, 대상, 메모")
                 .font(.caption)
                 .foregroundStyle(AppColors.muted)
             AdaptivePair(stacked: compact) {
-                FieldLabel("봉투번호", badge: "자동") {
-                    TextField("봉투번호", value: $state.draft.envelopeNo, format: .number)
+                FieldLabel(state.draft.paymentMethod == .transfer ? "계좌차번" : "봉투번호", badge: "자동") {
+                    TextField(
+                        state.draft.paymentMethod == .transfer ? "계좌차번" : "봉투번호",
+                        value: state.draft.paymentMethod == .transfer ? $state.draft.transferNo : $state.draft.envelopeNo,
+                        format: .number
+                    )
                         .textFieldStyle(.plain)
                         .font(.system(size: 18, weight: .semibold))
                 }
@@ -562,14 +566,7 @@ struct EntryFormView: View {
                         options: PaymentMethod.allCases.map(\.label)
                     ) { label in
                         if let method = PaymentMethod.allCases.first(where: { $0.label == label }) {
-                            state.draft.paymentMethod = method
-                        }
-                    }
-                    .onChange(of: state.draft.paymentMethod) { _, method in
-                        if method == .transfer, state.draft.createdAtText.isEmpty {
-                            state.draft.createdAtText = nowString()
-                        } else if method != .transfer {
-                            state.draft.createdAtText = ""
+                            state.setDraftPaymentMethod(method)
                         }
                     }
                 }
@@ -598,43 +595,14 @@ struct EntryFormView: View {
                     }
             }
             guestContextFields(dense: dense)
-            AdaptivePair(stacked: compact) {
-                FieldLabel("금액", badge: "필수") {
-                    HStack {
-                        Text("₩").foregroundStyle(AppColors.muted)
-                        TextField("금액을 입력하세요", text: $state.draft.amountText)
-                            .textFieldStyle(.plain)
-                            .onChange(of: state.draft.amountText) { _, value in
-                                let amount = parseAmount(value)
-                                state.draft.amountText = amount > 0 ? formatNumber(amount) : ""
-                            }
-                    }
-                }
-            } second: {
-                FieldLabel("식권", badge: "기본") {
-                    HStack(spacing: 9) {
-                        Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
-                        TicketStepButton(title: "-") {
-                            state.draft.mealTicketCount = max(0, state.draft.mealTicketCount - 1)
-                        }
-                        Text("\(state.draft.mealTicketCount)")
-                            .font(.system(size: 15, weight: .semibold))
-                            .monospacedDigit()
-                            .frame(width: 32)
-                        TicketStepButton(title: "+") {
-                            state.draft.mealTicketCount += 1
-                        }
-                        Text("매")
-                    }
-                }
-            }
+            amountAndTicketFields
             VStack(alignment: .leading, spacing: 8) {
                 Text("금액 빠른 선택")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppColors.text)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: dense ? 86 : 92), spacing: dense ? 8 : 10)], spacing: dense ? 8 : 10) {
                     ForEach(defaultQuickAmounts, id: \.self) { amount in
-                        QuickAmountButton(formatNumber(amount)) {
+                        QuickAmountButton(amount == 0 ? "0원" : formatNumber(amount)) {
                             state.draft.amountText = formatNumber(amount)
                         }
                     }
@@ -647,6 +615,62 @@ struct EntryFormView: View {
                 TextEditor(text: $state.draft.memo)
                     .frame(minHeight: dense ? 42 : 52, idealHeight: dense ? 54 : 52, maxHeight: dense ? 72 : 52)
                     .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    private func formattedAmountInput(_ value: String) -> String {
+        let digits = value.filter(\.isNumber)
+        guard !digits.isEmpty else { return "" }
+        return formatNumber(Int(digits) ?? 0)
+    }
+
+    @ViewBuilder
+    private var amountAndTicketFields: some View {
+        let fields = [
+            AnyView(amountField),
+            AnyView(ticketCounter(title: "성인 식권", count: $state.draft.mealTicketCount)),
+            AnyView(ticketCounter(title: "소인 식권", count: $state.draft.childMealTicketCount))
+        ]
+        if compact {
+            VStack(spacing: 12) {
+                ForEach(fields.indices, id: \.self) { fields[$0] }
+            }
+        } else {
+            HStack(spacing: 12) {
+                ForEach(fields.indices, id: \.self) { fields[$0] }
+            }
+        }
+    }
+
+    private var amountField: some View {
+        FieldLabel("금액", badge: "필수") {
+            HStack {
+                Text("₩").foregroundStyle(AppColors.muted)
+                TextField("금액을 입력하세요", text: $state.draft.amountText)
+                    .textFieldStyle(.plain)
+                    .onChange(of: state.draft.amountText) { _, value in
+                        state.draft.amountText = formattedAmountInput(value)
+                    }
+            }
+        }
+    }
+
+    private func ticketCounter(title: String, count: Binding<Int>) -> some View {
+        FieldLabel(title, badge: "기본") {
+            HStack(spacing: 9) {
+                Image(systemName: "fork.knife").foregroundStyle(AppColors.muted)
+                TicketStepButton(title: "-") {
+                    count.wrappedValue = max(0, count.wrappedValue - 1)
+                }
+                Text("\(count.wrappedValue)")
+                    .font(.system(size: 15, weight: .semibold))
+                    .monospacedDigit()
+                    .frame(width: 32)
+                TicketStepButton(title: "+") {
+                    count.wrappedValue += 1
+                }
+                Text("매")
             }
         }
     }
@@ -764,7 +788,7 @@ struct DuplicateEntryPreviewRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("봉투 #\(entry.envelopeNo)")
+                Text(entry.sequenceLabel)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(AppColors.gold)
                 Text(entry.name)
@@ -779,7 +803,7 @@ struct DuplicateEntryPreviewRow: View {
             Text("모임 \(entry.groupName) · 관계 \(entry.relationship.isEmpty ? "-" : entry.relationship) · 대상 \(entry.targetPerson.isEmpty ? "-" : entry.targetPerson)")
                 .font(.caption)
                 .foregroundStyle(AppColors.muted)
-            Text("금액 \(formatWon(entry.amount)) · 식권 \(entry.mealTicketCount)매")
+            Text("금액 \(formatWon(entry.amount)) · 성인 \(entry.mealTicketCount)매 · 소인 \(entry.childMealTicketCount)매")
                 .font(.caption)
                 .foregroundStyle(AppColors.text)
         }
@@ -826,7 +850,7 @@ struct SummaryCardsRow: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: fillsHeight ? 12 : 18) {
             StatCard(title: "총 축의금", value: formatWon(state.summary.totalAmount), footnote: "건수 \(state.summary.activeCount)건", symbol: "wonsign", fillsHeight: fillsHeight)
-            StatCard(title: "총 식권", value: "\(state.summary.totalTickets)매", footnote: ticketFootnote, symbol: "fork.knife", fillsHeight: fillsHeight)
+            StatCard(title: "총 식권", value: "\(state.summary.totalTickets + state.summary.totalChildTickets)매", footnote: ticketFootnote, symbol: "fork.knife", fillsHeight: fillsHeight)
             StatCard(title: "총 봉투수", value: "\(state.summary.activeCount)개", footnote: envelopeFootnote, symbol: "envelope", fillsHeight: fillsHeight)
             StatCard(
                 title: "평균 축의금",
@@ -846,9 +870,11 @@ struct SummaryCardsRow: View {
     }
 
     private var ticketFootnote: String {
-        let total = state.operationSettings.totalMealTickets
-        guard total > 0 else { return "총 식권수를 설정하면 남은 매수 표시" }
-        return "준비 \(total)매 ㅣ 남은 \(max(0, total - state.summary.totalTickets))매"
+        let adultTotal = state.operationSettings.totalMealTickets
+        let childTotal = state.operationSettings.totalChildMealTickets
+        let adultText = adultTotal > 0 ? "성인 \(state.summary.totalTickets)/\(adultTotal)매" : "성인 \(state.summary.totalTickets)매"
+        let childText = childTotal > 0 ? "소인 \(state.summary.totalChildTickets)/\(childTotal)매" : "소인 \(state.summary.totalChildTickets)매"
+        return "\(adultText) ㅣ \(childText)"
     }
 
     private var envelopeFootnote: String {
@@ -899,8 +925,10 @@ struct SearchView: View {
                         .onChange(of: filters.minAmount) { _, value in filters.minAmount = formatFilterAmount(value) }
                     SoftTextField("최대 금액", text: $filters.maxAmount)
                         .onChange(of: filters.maxAmount) { _, value in filters.maxAmount = formatFilterAmount(value) }
-                    SoftTextField("식권수", text: $filters.ticketCount)
+                    SoftTextField("성인 식권수", text: $filters.ticketCount)
                         .onChange(of: filters.ticketCount) { _, value in filters.ticketCount = value.filter(\.isNumber) }
+                    SoftTextField("소인 식권수", text: $filters.childTicketCount)
+                        .onChange(of: filters.childTicketCount) { _, value in filters.childTicketCount = value.filter(\.isNumber) }
                     Picker("입금방식", selection: Binding(get: { filters.paymentMethod }, set: { filters.paymentMethod = $0 })) {
                         Text("방식 전체").tag(PaymentMethod?.none)
                         ForEach(PaymentMethod.allCases) { method in
@@ -938,8 +966,9 @@ struct SearchView: View {
     }
 
     private func formatFilterAmount(_ value: String) -> String {
-        let amount = parseAmount(value)
-        return amount > 0 ? formatNumber(amount) : ""
+        let digits = value.filter(\.isNumber)
+        guard !digits.isEmpty else { return "" }
+        return formatNumber(Int(digits) ?? 0)
     }
 
     private func performSearch() {
@@ -1042,7 +1071,7 @@ struct SummaryOverviewSection: View {
                 )
                 SettlementCheckCard(
                     title: "식권",
-                    value: "\(state.summary.totalTickets)매",
+                    value: "\(state.summary.totalTickets + state.summary.totalChildTickets)매",
                     detail: ticketDetail,
                     symbol: "ticket"
                 )
@@ -1106,9 +1135,11 @@ struct SummaryOverviewSection: View {
     }
 
     private var ticketDetail: String {
-        let total = state.operationSettings.totalMealTickets
-        guard total > 0 else { return "총 식권수를 설정하면 남은 매수를 표시합니다." }
-        return "준비 \(total)매 · 남은 \(max(0, total - state.summary.totalTickets))매"
+        let adult = state.operationSettings.totalMealTickets
+        let child = state.operationSettings.totalChildMealTickets
+        let adultText = adult > 0 ? "성인 \(state.summary.totalTickets)/\(adult)매" : "성인 \(state.summary.totalTickets)매"
+        let childText = child > 0 ? "소인 \(state.summary.totalChildTickets)/\(child)매" : "소인 \(state.summary.totalChildTickets)매"
+        return "\(adultText) · \(childText)"
     }
 
     private var envelopeDetail: String {
@@ -1215,9 +1246,11 @@ struct ClosingChecklistCard: View {
     }
 
     private var ticketDetail: String {
-        let total = state.operationSettings.totalMealTickets
-        guard total > 0 else { return "사용 \(state.summary.totalTickets)매" }
-        return "사용 \(state.summary.totalTickets)매 / 남은 \(max(0, total - state.summary.totalTickets))매"
+        let adult = state.operationSettings.totalMealTickets
+        let child = state.operationSettings.totalChildMealTickets
+        let adultText = adult > 0 ? "성인 \(state.summary.totalTickets)/\(adult)매" : "성인 \(state.summary.totalTickets)매"
+        let childText = child > 0 ? "소인 \(state.summary.totalChildTickets)/\(child)매" : "소인 \(state.summary.totalChildTickets)매"
+        return "\(adultText), \(childText)"
     }
 
     private var duplicateAndGapDetail: String {
@@ -1416,6 +1449,7 @@ struct OperationSettingsPanel: View {
     @EnvironmentObject private var state: AppState
     @State private var eventTitle = ""
     @State private var totalMealTickets = ""
+    @State private var totalChildMealTickets = ""
     @State private var expectedEnvelopeCount = ""
     @State private var operationNote = ""
 
@@ -1435,8 +1469,10 @@ struct OperationSettingsPanel: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
                 SoftTextField("행사명", text: $eventTitle)
-                SoftTextField("총 식권수", text: $totalMealTickets)
+                SoftTextField("총 성인 식권수", text: $totalMealTickets)
                     .onChange(of: totalMealTickets) { _, value in totalMealTickets = formatSettingNumber(value) }
+                SoftTextField("총 소인 식권수", text: $totalChildMealTickets)
+                    .onChange(of: totalChildMealTickets) { _, value in totalChildMealTickets = formatSettingNumber(value) }
                 SoftTextField("예상 봉투수", text: $expectedEnvelopeCount)
                     .onChange(of: expectedEnvelopeCount) { _, value in expectedEnvelopeCount = formatSettingNumber(value) }
             }
@@ -1456,6 +1492,7 @@ struct OperationSettingsPanel: View {
     private func sync() {
         eventTitle = state.operationSettings.eventTitle
         totalMealTickets = state.operationSettings.totalMealTickets > 0 ? formatNumber(state.operationSettings.totalMealTickets) : ""
+        totalChildMealTickets = state.operationSettings.totalChildMealTickets > 0 ? formatNumber(state.operationSettings.totalChildMealTickets) : ""
         expectedEnvelopeCount = state.operationSettings.expectedEnvelopeCount > 0 ? formatNumber(state.operationSettings.expectedEnvelopeCount) : ""
         operationNote = state.operationSettings.operationNote
     }
@@ -1465,6 +1502,7 @@ struct OperationSettingsPanel: View {
             OperationSettings(
                 eventTitle: eventTitle,
                 totalMealTickets: parseAmount(totalMealTickets),
+                totalChildMealTickets: parseAmount(totalChildMealTickets),
                 expectedEnvelopeCount: parseAmount(expectedEnvelopeCount),
                 operationNote: operationNote
             )
@@ -1562,7 +1600,7 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
                 "미리 도장이나 사인이 된 식권만 배부해 웨딩홀 공용 식권과 섞이지 않게 합니다.",
                 "답례품권을 드릴 때는 반드시 식권을 회수한 뒤 드려 이중 지출을 막습니다.",
                 "어린이 하객 식권은 성인 식권과 구분해 전달합니다. 식대 차이가 생길 수 있습니다.",
-                "설정에 총 식권수를 입력해 정산 탭에서 남은 식권을 계속 확인합니다."
+                "설정에 성인/소인 총 식권수를 입력해 정산 탭에서 남은 식권을 계속 확인합니다."
             ]),
             GuideSection(title: "보안과 사고 예방", items: [
                 "낯선 사람이 가족, 심부름, 확인 명목으로 접근해도 신랑/신부 본인이나 미리 약속된 직계 가족이 아니면 봉투를 넘기지 않습니다.",
@@ -1576,12 +1614,13 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
             GuideSection(title: "행사 전", items: [
                 "비밀번호와 복구키를 확인합니다.",
                 "테스트 모드에서 3건 이상 입력해 저장, 검색, 취소, 복구, 엑셀 추출을 점검합니다.",
-                settings.totalMealTickets > 0 ? "설정된 총 식권수: \(settings.totalMealTickets)매" : "설정에서 총 식권수를 입력해 남은 식권을 볼 수 있게 합니다.",
+                settings.totalMealTickets > 0 ? "설정된 총 성인 식권수: \(settings.totalMealTickets)매" : "설정에서 총 성인 식권수를 입력해 남은 식권을 볼 수 있게 합니다.",
+                settings.totalChildMealTickets > 0 ? "설정된 총 소인 식권수: \(settings.totalChildMealTickets)매" : "소인 하객이 예상되면 총 소인 식권수도 입력합니다.",
                 settings.expectedEnvelopeCount > 0 ? "설정된 예상 봉투수: \(settings.expectedEnvelopeCount)개" : "예상 봉투수가 있으면 설정에 입력해 봉투 차이를 확인합니다.",
                 "볼펜 3~4자루, 고무줄, 집게, 실물 계산기, 간식, 물을 준비합니다."
             ]),
             GuideSection(title: "운영 중", items: [
-                "봉투를 받으면 순번을 적고, 금액 확인 후 봉투 뒷면에도 금액을 적습니다.",
+                "봉투를 받으면 순번을 적고, 금액 확인 후 봉투 뒷면에도 금액을 적습니다. 계좌이체는 앱의 계좌차번으로 별도 대조합니다.",
                 "앱 저장 후 최근 입력 내역에서 봉투번호와 이름이 맞는지 바로 확인합니다.",
                 "방명록 없이 가려는 하객에게는 방명록 작성을 한 번 더 권유합니다.",
                 "동명이인, 누락 봉투, 과도하게 큰 금액은 바로 메모 또는 검색으로 재확인합니다.",
@@ -1600,18 +1639,18 @@ private func guideSections(for page: GuidePage, settings: OperationSettings) -> 
         return [
             GuideSection(title: "입력", items: [
                 "봉투번호는 자동 증가하지만 필요하면 직접 수정할 수 있습니다.",
-                "이름과 금액은 필수이며, 식권 수는 기본 0매입니다.",
+                "이름과 금액은 필수이며, 금액은 0원도 저장할 수 있습니다. 식권 수는 성인/소인 모두 기본 0매입니다.",
                 "모임, 관계, 대상은 직접 입력하면 이후 목록에서 다시 선택할 수 있습니다.",
                 "같은 이름이 있으면 기존 기록이 즉시 표시되고 새 동명이인 저장 여부를 고를 수 있습니다."
             ]),
             GuideSection(title: "검색/정산", items: [
-                "검색에서는 이름, 모임, 대상, 금액 범위, 식권수, 입금방식, 상태로 기록을 찾습니다.",
+                "검색에서는 이름, 모임, 대상, 금액 범위, 성인/소인 식권수, 입금방식, 상태로 기록을 찾습니다.",
                 "정산에서는 봉투 대조, 식권 대조, 현금 확인, 계좌 확인 카드를 먼저 확인합니다.",
                 "마감 검수 순서에서 실물 봉투, 현금, 계좌 입금, 남은 식권, 동명이인을 차례로 확인합니다."
             ]),
             GuideSection(title: "설정/엑셀", items: [
-                "설정에서 총 식권수와 예상 봉투수를 입력하면 입력과 정산 카드에 남은 수량과 차이가 표시됩니다.",
-                "엑셀 추출은 전체내역, 요약, 검색용, 시간대별, 동명이인, 수정이력 시트를 포함합니다.",
+                "설정에서 총 성인/소인 식권수와 예상 봉투수를 입력하면 입력과 정산 카드에 남은 수량과 차이가 표시됩니다.",
+                "엑셀 추출은 전체내역, 요약, 검색용, 봉투 검수, 현금·계좌 정산, 식권 검수, 동명이인, 수정이력 시트를 포함합니다.",
                 "백업 복원 전에는 현재 DB가 자동 백업됩니다."
             ])
         ]
@@ -1761,16 +1800,16 @@ struct EntryTable: View {
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppColors.lineSoft, lineWidth: 1))
         } else {
             Table(displayedEntries, sortOrder: $sortOrder) {
-                TableColumn("봉투", value: \.envelopeNo) { Text("\($0.envelopeNo)").monospacedDigit() }
-                    .width(min: 48, ideal: 56, max: 64)
+                TableColumn("차번", value: \.sortSequence) { Text($0.shortSequenceLabel).monospacedDigit() }
+                    .width(min: 58, ideal: 72, max: 86)
                 TableColumn("이름", value: \.name) { Text($0.name).lineLimit(1) }
                     .width(min: 78, ideal: 100, max: 150)
                 TableColumn("분류", value: \.sortCategory) { EntryCategoryCell(entry: $0) }
                     .width(min: 94, ideal: 116, max: 142)
                 TableColumn("금액", value: \.amount) { Text(formatWon($0.amount)).foregroundStyle(AppColors.gold).monospacedDigit() }
                     .width(min: 92, ideal: 112, max: 132)
-                TableColumn("식권", value: \.mealTicketCount) { Text("\($0.mealTicketCount)").monospacedDigit() }
-                    .width(min: 44, ideal: 52, max: 60)
+                TableColumn("식권", value: \.totalMealTicketCount) { TicketCountCell(entry: $0) }
+                    .width(min: 58, ideal: 70, max: 84)
                 TableColumn("방식", value: \.sortPaymentMethod) { Text($0.paymentMethod.label) }
                     .width(min: 48, ideal: 56, max: 64)
                 TableColumn("상태", value: \.sortStatus) { EntryStatusBadge(status: $0.status) }
@@ -1812,12 +1851,36 @@ private extension LedgerEntry {
         [groupName, relationship, targetPerson].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
+    var sortSequence: String {
+        if paymentMethod == .transfer {
+            return "2-\(String(format: "%08d", transferNo > 0 ? transferNo : envelopeNo))"
+        }
+        return "1-\(String(format: "%08d", envelopeNo))"
+    }
+
     var sortPaymentMethod: String {
         paymentMethod.label
     }
 
     var sortStatus: String {
         status.label
+    }
+}
+
+struct TicketCountCell: View {
+    let entry: LedgerEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("성 \(entry.mealTicketCount)")
+                .font(.caption)
+                .foregroundStyle(AppColors.text)
+                .monospacedDigit()
+            Text("소 \(entry.childMealTicketCount)")
+                .font(.caption2)
+                .foregroundStyle(AppColors.muted)
+                .monospacedDigit()
+        }
     }
 }
 
@@ -1875,7 +1938,7 @@ struct EntryCompactRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 14) {
-                Text("#\(entry.envelopeNo)")
+                Text(entry.shortSequenceLabel)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(AppColors.gold)
                     .frame(width: 48, alignment: .leading)
@@ -1898,7 +1961,7 @@ struct EntryCompactRow: View {
                     Text(formatWon(entry.amount))
                         .font(.headline)
                         .foregroundStyle(AppColors.gold)
-                    Text("식권 \(entry.mealTicketCount)매")
+                    Text("성인 \(entry.mealTicketCount)매 · 소인 \(entry.childMealTicketCount)매")
                         .font(.caption)
                         .foregroundStyle(AppColors.muted)
                     Text(ledgerClockText(entry.createdAt))
@@ -1945,7 +2008,7 @@ struct EntryManagementActions: View {
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("봉투 #\(entry.envelopeNo) \(entry.name) 기록은 검색과 정산에서 제거됩니다. 삭제 이력은 수정이력에 남습니다.")
+            Text("\(entry.sequenceLabel) \(entry.name) 기록은 검색과 정산에서 제거됩니다. 삭제 이력은 수정이력에 남습니다.")
         }
     }
 }

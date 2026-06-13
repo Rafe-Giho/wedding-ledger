@@ -62,7 +62,7 @@ let appName = "WeddingLedger"
 let appTitle = "축의대 장부"
 let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 let defaultGroup = "미분류"
-let defaultQuickAmounts = [30_000, 50_000, 100_000, 150_000, 200_000, 300_000, 500_000, 1_000_000]
+let defaultQuickAmounts = [0, 30_000, 50_000, 100_000, 150_000, 200_000, 300_000, 500_000, 1_000_000]
 let pbkdf2Iterations = 310_000
 
 func formatWon(_ value: Int) -> String {
