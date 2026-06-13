@@ -84,8 +84,9 @@ final class AppState: ObservableObject {
                 message = "같은 이름의 정상 기록이 있습니다. 저장 방식을 선택해 주세요."
                 return
             }
+            let savedPaymentMethod = draft.paymentMethod
             _ = try store.createEntry(draft, mode: mode)
-            draft = EntryDraft(envelopeNo: try store.nextEnvelopeNo(mode: mode), transferNo: try store.nextTransferNo(mode: mode))
+            draft = try nextDraft(paymentMethod: savedPaymentMethod)
             duplicateMatches = []
             refresh()
         } catch {
@@ -147,6 +148,21 @@ final class AppState: ObservableObject {
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func nextDraft(paymentMethod: PaymentMethod) throws -> EntryDraft {
+        var next = EntryDraft(
+            envelopeNo: try store.nextEnvelopeNo(mode: mode),
+            transferNo: try store.nextTransferNo(mode: mode)
+        )
+        next.paymentMethod = paymentMethod
+        if paymentMethod == .transfer {
+            next.envelopeNo = 0
+            next.createdAtText = nowString()
+        } else {
+            next.transferNo = 0
+        }
+        return next
     }
 
     func switchMode(_ newMode: LedgerMode) {

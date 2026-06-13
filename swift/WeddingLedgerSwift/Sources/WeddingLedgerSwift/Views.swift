@@ -1246,11 +1246,15 @@ struct ClosingChecklistCard: View {
     }
 
     private var ticketDetail: String {
-        let adult = state.operationSettings.totalMealTickets
-        let child = state.operationSettings.totalChildMealTickets
-        let adultText = adult > 0 ? "성인 \(state.summary.totalTickets)/\(adult)매" : "성인 \(state.summary.totalTickets)매"
-        let childText = child > 0 ? "소인 \(state.summary.totalChildTickets)/\(child)매" : "소인 \(state.summary.totalChildTickets)매"
-        return "\(adultText), \(childText)"
+        [
+            ticketUsageText(title: "성인", used: state.summary.totalTickets, prepared: state.operationSettings.totalMealTickets),
+            ticketUsageText(title: "소인", used: state.summary.totalChildTickets, prepared: state.operationSettings.totalChildMealTickets)
+        ].joined(separator: ", ")
+    }
+
+    private func ticketUsageText(title: String, used: Int, prepared: Int) -> String {
+        guard prepared > 0 else { return "\(title) 사용 \(used)매" }
+        return "\(title) 사용 \(used)/\(prepared)매 · 남은 \(max(0, prepared - used))매"
     }
 
     private var duplicateAndGapDetail: String {
